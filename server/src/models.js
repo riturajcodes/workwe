@@ -1,0 +1,23 @@
+import mongoose from 'mongoose';
+
+const userSchema = new mongoose.Schema(
+  {
+    googleId: { type: String, unique: true, required: true },
+    email: String,
+    name: String,
+    picture: String,
+  },
+  { timestamps: true }
+);
+
+const usageSchema = new mongoose.Schema({
+  key: { type: String, required: true }, // "u:<userId>" | "g:<guestId>" | "ip:<addr>"
+  day: { type: String, required: true }, // UTC YYYY-MM-DD
+  count: { type: Number, default: 0 },
+});
+usageSchema.index({ key: 1, day: 1 }, { unique: true });
+// Old counters are useless after a day or two; let Mongo clean them up.
+usageSchema.add({ createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 48 } });
+
+export const User = mongoose.model('User', userSchema);
+export const Usage = mongoose.model('Usage', usageSchema);
