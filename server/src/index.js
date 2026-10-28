@@ -141,6 +141,13 @@ app.get('/api/invite/:code', async (req, res) => {
   res.json(inviteInfo(inv));
 });
 
+// Whose sign-up link this is, so the sign-in screen can say who referred you.
+app.get('/api/ref/:code', async (req, res) => {
+  const u = await User.findOne({ refCode: String(req.params.code).slice(0, 20) });
+  if (!u) return res.status(404).json({ error: 'not found' });
+  res.json({ name: u.name, picture: u.picture });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: origins }, maxHttpBufferSize: 1e5 });
 

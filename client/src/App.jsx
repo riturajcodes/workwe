@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { fetchInvite, fetchMe, getToken, googleLogin, setRef, setToken } from './api.js';
+import { fetchInvite, fetchMe, fetchReferrer, getRef, getToken, googleLogin, setRef, setToken } from './api.js';
 import { placeLabel, useWorkRoom } from './useWorkRoom.js';
 import { Avatar, Chat, Controls, GoogleButton, Icon, Logo, ReactionLayer, VipBadge, Video } from './components.jsx';
 import Landing from './Landing.jsx';
@@ -65,6 +65,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(LINK.invite && { code: LINK.invite, loading: true });
   const [vipOpen, setVipOpen] = useState(false);
+  const [referrer, setReferrer] = useState(null); // whose sign-up link brought this visitor
   const [copied, copy] = useCopy();
   const [slow, setSlow] = useState(false); // still not connected after a while
   const [authKey, setAuthKey] = useState(0);
@@ -75,7 +76,7 @@ export default function App() {
   const [confirmNext, setConfirmNext] = useState(false);
   const [loginOpen, setLoginOpen] = useState(!!LINK.ref); // a sign-up link opens sign-in straight away
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('workwe_theme') || 'light'; } catch { return 'light'; }
+    try { return localStorage.getItem('workwe_theme') || 'dark'; } catch { return 'dark'; }
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -97,6 +98,8 @@ export default function App() {
 
   useEffect(() => {
     if (getToken()) fetchMe().then((u) => (u ? setUser(u) : setToken(null))).catch(() => {});
+    const ref = getRef();
+    if (ref && !getToken()) fetchReferrer(ref).then((r) => (r ? setReferrer(r) : setRef(null))).catch(() => {});
     if (LINK.invite) fetchInvite(LINK.invite).then((info) => setPendingInvite(info ? { ...info, loading: false } : { code: LINK.invite, expired: true })).catch(() => {});
   }, []);
 
@@ -105,6 +108,7 @@ export default function App() {
       const { token, user } = await googleLogin(credential);
       setToken(token);
       setRef(null);
+      setReferrer(null);
       setUser(user);
       setAuthError(null);
       room.setLimitHit(false);
@@ -406,6 +410,7 @@ export default function App() {
               </>
             )}
             <GoogleButton onCredential={onCredential} />
+            {referrer && <div className="ref-note"><Avatar name={referrer.name} picture={referrer.picture} size={20} />Referred by {referrer.name}</div>}
             {authError && <p className="hint warn">{authError}</p>}
             <button className="link" onClick={() => { setLoginOpen(false); room.setLimitHit(false); }}>{room.limitHit ? 'Not now' : 'Close'}</button>
           </div>

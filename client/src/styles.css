@@ -257,6 +257,7 @@ h1 em { font-style: normal; color: var(--accent); }
 :root[data-theme='dark'] .vip-chip, :root:not([data-theme]) .vip-chip { color: #ffd38a; }
 .vip-modal .invite-link { margin-top: 4px; }
 .modal .after-avatar { margin-top: 14px; }
+.ref-note { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 5px 12px 5px 5px; border-radius: 99px; background: var(--tint); color: var(--tint-ink); font-size: 13px; font-weight: 500; }
 @media (prefers-reduced-motion: reduce) { .tile.vip, .self.vip { animation: none; } }
 .perm-ico { display: inline-flex; gap: 6px; padding: 12px 14px; margin-bottom: 18px; border-radius: 14px; background: var(--tint); color: var(--tint-ink); }
 

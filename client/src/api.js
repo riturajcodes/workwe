@@ -46,3 +46,4 @@ const getJson = async (path) => {
   return r.ok ? r.json() : null;
 };
 export const fetchInvite = (code) => getJson(`/api/invite/${encodeURIComponent(code)}`);
+export const fetchReferrer = (code) => getJson(`/api/ref/${encodeURIComponent(code)}`);
