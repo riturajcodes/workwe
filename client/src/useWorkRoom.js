@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { connectSocket } from './api.js';
+import { SERVER, connectSocket } from './api.js';
 
-const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+// A usable local stream needs a live camera track and a live microphone track.
+const live = (s) => !!s && s.getVideoTracks().some((t) => t.readyState === 'live') && s.getAudioTracks().some((t) => t.readyState === 'live');
+const errorKind = (e) => {
+  if (e.name === 'NotAllowedError' || e.name === 'SecurityError') return 'denied';
+  if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError') return 'missing';
+  if (e.name === 'NotReadableError' || e.name === 'AbortError') return 'busy';
+  return 'other';
+};
+
+export const placeLabel = (p) => (p ? [p.city, p.country].filter(Boolean).join(', ') + (p.flag ? ` ${p.flag}` : '') : '');
+
+// STUN only works when both people can reach each other directly. The server adds TURN relays
+// (see /api/ice) so people behind strict NATs, mobile data or VPNs can still connect.
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+const ICE_TTL_MS = 60 * 60_000;
 
 // Owns the socket, the RTCPeerConnection (using the "perfect negotiation" pattern
 // so camera and screen tracks can be added mid-call) and the room state.
@@ -17,11 +31,14 @@ export function useWorkRoom(authKey) {
   const [peerStatus, setPeerStatus] = useState({ mic: true, cam: true, screen: false, screenId: null });
   const [mic, setMic] = useState(true);
   const [cam, setCam] = useState(true);
-  const [mediaError, setMediaError] = useState(null);
+  const [mediaError, setMediaError] = useState(null); // { kind: denied | missing | busy | lost | unsupported | other }
   const [connState, setConnState] = useState('new');
   const [bursts, setBursts] = useState([]);
   const [online, setOnline] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [inviteCode, setInviteCode] = useState(null); // set while waiting for a friend to open our link
+  const [inviteMissing, setInviteMissing] = useState(false);
+  const [reward, setReward] = useState(null); // the updated user after someone signs up through our link
   const burstId = useRef(0);
 
   // `seed` makes both people's confetti identical (the sender picks it and shares it).
@@ -37,7 +54,19 @@ export function useWorkRoom(authKey) {
   const screenRef = useRef(null);
   const screenSendersRef = useRef([]);
   const negRef = useRef({ making: false, ignore: false, polite: false });
+  const iceRef = useRef({ iceServers: STUN, at: 0 });
+  const signalQueue = useRef(Promise.resolve());
+
+  const loadIce = useCallback(async () => {
+    if (Date.now() - iceRef.current.at < ICE_TTL_MS) return;
+    try {
+      const r = await fetch(`${SERVER}/api/ice`);
+      const { iceServers } = await r.json();
+      if (Array.isArray(iceServers) && iceServers.length) iceRef.current = { iceServers, at: Date.now() };
+    } catch { /* keep the STUN defaults */ }
+  }, []);
   const statusRef = useRef({ mic: true, cam: true, screen: false, screenId: null });
+  const lostRef = useRef(() => {});
 
   const sendStatus = useCallback((patch) => {
     statusRef.current = { ...statusRef.current, ...patch };
@@ -62,7 +91,7 @@ export function useWorkRoom(authKey) {
 
   const createPc = useCallback((initiator) => {
     closePc();
-    const pc = new RTCPeerConnection(ICE);
+    const pc = new RTCPeerConnection({ iceServers: iceRef.current.iceServers });
     pcRef.current = pc;
     negRef.current = { making: false, ignore: false, polite: !initiator };
 
@@ -76,7 +105,15 @@ export function useWorkRoom(authKey) {
       track.onended = () => setRemoteStreams((prev) => [...prev]);
     };
     pc.onicecandidate = ({ candidate }) => candidate && socketRef.current?.emit('signal', { candidate });
-    pc.onconnectionstatechange = () => setConnState(pc.connectionState);
+    let restarted = false;
+    pc.onconnectionstatechange = () => {
+      setConnState(pc.connectionState);
+      // one automatic ICE restart (from the initiator, to avoid both sides offering at once)
+      if (pc.connectionState === 'failed' && initiator && !restarted) {
+        restarted = true;
+        pc.restartIce();
+      }
+    };
     pc.onnegotiationneeded = async () => {
       try {
         negRef.current.making = true;
@@ -130,30 +167,47 @@ export function useWorkRoom(authKey) {
     s.on('quota', setQuota);
     s.on('online', setOnline);
     s.on('limit', (q) => {
+      stopScreenTracks();
       setQuota(q);
       setLimitHit(true);
       setPhase('idle');
     });
     s.on('searching', () => setPhase('searching'));
-    s.on('matched', ({ initiator, peer }) => {
+    s.on('matched', ({ initiator, peer, invite }) => {
       setPeer(peer);
-      setMessages([]);
+      const where = placeLabel(peer.place);
+      setMessages([{ system: true, text: invite ? 'Your friend joined. Enjoy the session!' : where ? `You’re working with someone in ${where}` : 'You’re matched. Say hello!' }]);
       setNotice(null);
+      setInviteCode(null);
       setPhase('matched');
       createPc(initiator);
       // let the partner know our current state (and screen, if we kept sharing)
       sendStatus({});
     });
-    s.on('signal', handleSignal);
+    s.on('invite', ({ code }) => {
+      setInviteCode(code);
+      setPhase('searching');
+    });
+    s.on('invite-missing', () => {
+      setInviteMissing(true);
+      setPhase('idle');
+    });
+    s.on('referral', ({ user }) => setReward(user));
+    // Handle signals strictly in order: an ICE candidate must not be applied while the
+    // offer/answer before it is still being set, or it is rejected and the call never connects.
+    s.on('signal', (d) => {
+      signalQueue.current = signalQueue.current.then(() => handleSignal(d));
+    });
     s.on('peer-status', setPeerStatus);
     s.on('reaction', ({ emoji, seed }) => addBurst(emoji, seed));
     s.on('chat', (m) => setMessages((p) => [...p, { ...m, mine: false }]));
     // When the partner leaves or skips, we go straight back into the queue.
+    // Screen sharing keeps going into the next match.
     s.on('peer-left', () => {
-      stopScreenTracks();
       closePc();
       setPeer(null);
       setLimitHit(false);
+      if (!live(localRef.current)) return lostRef.current();
       setNotice('Your partner moved on. Finding someone new…');
       setPhase('searching');
       s.emit('find');
@@ -163,40 +217,72 @@ export function useWorkRoom(authKey) {
       closePc();
       setPhase('idle');
       setPeer(null);
+      setInviteCode(null);
     };
   }, [authKey, createPc, closePc, stopScreenTracks, handleSignal, sendStatus, addBurst]);
 
+  // Camera and microphone are both required; there is no audio-only or no-media fallback.
   const startMedia = useCallback(async () => {
-    if (localRef.current) return localRef.current;
-    const attempts = [
-      { video: { width: 1280, height: 720, facingMode: 'user' }, audio: { echoCancellation: true, noiseSuppression: true } },
-      { video: false, audio: true },
-    ];
-    for (const c of attempts) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(c);
-        localRef.current = stream;
-        setLocalStream(stream);
-        setCam(stream.getVideoTracks().length > 0);
-        statusRef.current.cam = stream.getVideoTracks().length > 0;
-        setMediaError(null);
-        return stream;
-      } catch (e) {
-        setMediaError(e.name === 'NotAllowedError' ? 'Camera and microphone are blocked. You can still join, but your partner won’t see or hear you.' : e.message);
-      }
+    if (live(localRef.current)) return localRef.current;
+    localRef.current?.getTracks().forEach((t) => t.stop());
+    localRef.current = null;
+    setLocalStream(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMediaError({ kind: 'unsupported' });
+      return null;
     }
-    return null;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: 'user' },
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+      if (!live(stream)) {
+        stream.getTracks().forEach((t) => t.stop());
+        setMediaError({ kind: 'missing' });
+        return null;
+      }
+      // fires if access is revoked or a device is unplugged mid-session (not on our own .stop())
+      stream.getTracks().forEach((t) => { t.onended = () => lostRef.current(); });
+      localRef.current = stream;
+      setLocalStream(stream);
+      setMic(true);
+      setCam(true);
+      statusRef.current = { ...statusRef.current, mic: true, cam: true };
+      setMediaError(null);
+      return stream;
+    } catch (e) {
+      setMediaError({ kind: errorKind(e), message: e.message });
+      return null;
+    }
   }, []);
 
-  const find = useCallback(async () => {
+  // Random match, or `invite` to join a friend's private link. An active screen share carries over.
+  const find = useCallback(async (invite) => {
     setLimitHit(false);
     setNotice(null);
-    await startMedia();
-    stopScreenTracks();
+    setInviteMissing(false);
+    setInviteCode(null);
     closePc();
     setPeer(null);
-    socketRef.current.emit('find');
-  }, [startMedia, stopScreenTracks, closePc]);
+    const [stream] = await Promise.all([startMedia(), loadIce()]);
+    if (!stream) {
+      socketRef.current.emit('leave');
+      stopScreenTracks();
+      setPhase('idle');
+      return;
+    }
+    socketRef.current.emit('find', typeof invite === 'string' ? { invite } : undefined);
+  }, [startMedia, stopScreenTracks, closePc, loadIce]);
+
+  const createInvite = useCallback(async () => {
+    setLimitHit(false);
+    setNotice(null);
+    closePc();
+    setPeer(null);
+    const [stream] = await Promise.all([startMedia(), loadIce()]);
+    if (!stream) return;
+    socketRef.current.emit('invite');
+  }, [startMedia, closePc, loadIce]);
 
   const next = useCallback(() => {
     socketRef.current.emit('leave');
@@ -208,8 +294,36 @@ export function useWorkRoom(authKey) {
     stopScreenTracks();
     closePc();
     setPeer(null);
+    setInviteCode(null);
     setPhase('idle');
   }, [closePc, stopScreenTracks]);
+
+  // Lost camera/mic access mid-session: end the call and ask for permission again.
+  useEffect(() => {
+    lostRef.current = () => {
+      if (!localRef.current) return;
+      stop();
+      localRef.current.getTracks().forEach((t) => t.stop());
+      localRef.current = null;
+      setLocalStream(null);
+      setMediaError({ kind: 'lost' });
+    };
+  }, [stop]);
+
+  // Also watch the browser's permission state, where supported (Chrome/Edge/Safari).
+  useEffect(() => {
+    const off = [];
+    for (const name of ['camera', 'microphone']) {
+      navigator.permissions?.query({ name }).then((p) => {
+        const onChange = () => p.state === 'denied' && lostRef.current();
+        p.addEventListener('change', onChange);
+        off.push(() => p.removeEventListener('change', onChange));
+      }).catch(() => { /* not queryable in this browser */ });
+    }
+    return () => off.forEach((f) => f());
+  }, []);
+
+  const clearMediaError = useCallback(() => setMediaError(null), []);
 
   const toggleMic = useCallback(() => {
     const t = localRef.current?.getAudioTracks()[0];
@@ -268,6 +382,6 @@ export function useWorkRoom(authKey) {
 
   return {
     phase, peer, quota, limitHit, setLimitHit, messages, localStream, screenStream, remoteScreen, remoteCamera,
-    peerStatus, mic, cam, mediaError, connState, find, next, stop, toggleMic, toggleCam, startShare, stopShare, sendChat, bursts, react, online, notice,
+    peerStatus, mic, cam, mediaError, clearMediaError, connState, createInvite, inviteCode, inviteMissing, setInviteMissing, reward, setReward, find, next, stop, toggleMic, toggleCam, startShare, stopShare, sendChat, bursts, react, online, notice,
   };
 }

@@ -18,6 +18,8 @@ export function Avatar({ name, picture, size = 40 }) {
   );
 }
 
+export const VipBadge = () => <b className="vip-badge" title="VIP: invited a friend to WorkWe">VIP</b>;
+
 export function Logo({ size = 22 }) {
   return (
     <svg className="logo" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -50,7 +52,7 @@ export function GoogleButton({ onCredential }) {
   return <div ref={box} className="gbtn" aria-busy={!ready} />;
 }
 
-export function Chat({ messages, onSend, peerName }) {
+export function Chat({ messages, onSend, peerName, onClose }) {
   const [text, setText] = useState('');
   const end = useRef(null);
   useEffect(() => {
@@ -63,7 +65,10 @@ export function Chat({ messages, onSend, peerName }) {
   };
   return (
     <aside className="chat">
-      <header>Chat<span>{peerName ? `with ${peerName}` : ''}</span></header>
+      <header>
+        <div>Chat<span>{peerName ? ` with ${peerName}` : ''}</span></div>
+        <button className="icon-btn" onClick={onClose} aria-label="Close chat"><Icon n="end" size={16} /></button>
+      </header>
       <div className="msgs">
         {messages.length === 0 && <p className="empty">No messages yet. Say hello and share what you’re working on.</p>}
         {messages.map((m, i) =>
@@ -157,7 +162,7 @@ function Burst({ emoji, seed }) {
   );
 }
 
-export function Controls({ mic, cam, sharing, onMic, onCam, onShare, onNext, onEnd, canShare, onReact }) {
+export function Controls({ mic, cam, sharing, onMic, onCam, onShare, onNext, onEnd, canShare, onReact, chatOpen, unread, onChat }) {
   const [picker, setPicker] = useState(false);
   return (
     <div className="controls">
@@ -170,8 +175,9 @@ export function Controls({ mic, cam, sharing, onMic, onCam, onShare, onNext, onE
       )}
       <button className={`ctl ${mic ? '' : 'off'}`} onClick={onMic} title={mic ? 'Mute' : 'Unmute'}><Icon n="mic" />{!mic && <i className="slash" />}</button>
       <button className={`ctl ${cam ? '' : 'off'}`} onClick={onCam} title={cam ? 'Turn camera off' : 'Turn camera on'}><Icon n="cam" />{!cam && <i className="slash" />}</button>
-      <button className={`ctl ${sharing ? 'on' : ''}`} onClick={onShare} disabled={!canShare} title={sharing ? 'Stop sharing' : 'Share your screen'}><Icon n="screen" /></button>
+      {canShare && <button className={`ctl ${sharing ? 'on' : ''}`} onClick={onShare} title={sharing ? 'Stop sharing' : 'Share your screen'}><Icon n="screen" /></button>}
       <button className={`ctl ${picker ? 'on' : ''}`} onClick={() => setPicker((o) => !o)} title="Send a reaction"><Icon n="smile" /></button>
+      <button className={`ctl ${chatOpen ? 'on' : ''}`} onClick={onChat} title={chatOpen ? 'Hide chat' : 'Show chat'}><Icon n="chat" />{unread && <i className="badge" />}</button>
       <span className="sep" />
       <button className="ctl pill" onClick={onNext}>Next<Icon n="next" size={16} /></button>
       <button className="ctl danger" onClick={onEnd} title="Leave"><Icon n="end" /></button>

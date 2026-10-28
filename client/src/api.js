@@ -15,13 +15,20 @@ export function getGuestId() {
 export const getToken = () => localStorage.getItem('workwe_token');
 export const setToken = (t) => (t ? localStorage.setItem('workwe_token', t) : localStorage.removeItem('workwe_token'));
 
-export const connectSocket = () => io(SERVER || undefined, { auth: { token: getToken(), guestId: getGuestId() } });
+const timeZone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return null; }
+};
+export const connectSocket = () => io(SERVER || undefined, { auth: { token: getToken(), guestId: getGuestId(), tz: timeZone() } });
+
+// Who referred this browser (from an invite link); sent along with the first Google sign-in.
+export const getRef = () => localStorage.getItem('workwe_ref');
+export const setRef = (r) => (r ? localStorage.setItem('workwe_ref', r) : localStorage.removeItem('workwe_ref'));
 
 export async function googleLogin(credential) {
   const r = await fetch(`${SERVER}/api/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ credential }),
+    body: JSON.stringify({ credential, ref: getRef() }),
   });
   if (!r.ok) throw new Error((await r.json()).error || 'Sign-in failed');
   return r.json();

@@ -6,6 +6,10 @@ const userSchema = new mongoose.Schema(
     email: String,
     name: String,
     picture: String,
+    refCode: { type: String, unique: true, sparse: true }, // goes in this user's invite links
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    referrals: { type: Number, default: 0 },
+    vipUntil: Date, // earned by referring a new user
   },
   { timestamps: true }
 );

@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import http from 'node:http';
+import crypto from 'node:crypto';
+import geoip from 'geoip-lite';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -20,8 +22,25 @@ app.set('trust proxy', true);
 app.use(cors({ origin: origins }));
 app.use(express.json());
 
+const VIP_DAYS = 30;
 const sign = (u) => jwt.sign({ uid: String(u._id) }, JWT_SECRET, { expiresIn: '30d' });
-const publicUser = (u) => ({ id: String(u._id), name: u.name, email: u.email, picture: u.picture });
+const isVip = (u) => !!u?.vipUntil && u.vipUntil > Date.now();
+const publicUser = (u) => ({
+  id: String(u._id), name: u.name, email: u.email, picture: u.picture,
+  refCode: u.refCode, referrals: u.referrals || 0, vip: isVip(u), vipUntil: isVip(u) ? u.vipUntil : null,
+});
+const newCode = (bytes = 5) => crypto.randomBytes(bytes).toString('base64url');
+
+// ---- location: city + country from the IP (offline GeoLite data, nothing sent anywhere) ----
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+const flagOf = (cc) => String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+function placeOf(ip, tz) {
+  const g = geoip.lookup(ip);
+  if (g?.country) return { city: g.city || null, country: regionNames.of(g.country), flag: flagOf(g.country) };
+  // private/local address (e.g. development): fall back to the browser's time zone city
+  const city = typeof tz === 'string' && tz.includes('/') ? tz.split('/').pop().replace(/_/g, ' ').slice(0, 40) : null;
+  return city ? { city, country: null, flag: '' } : null;
+}
 async function userFromToken(token) {
   if (!token) return null;
   try {
@@ -33,26 +52,76 @@ async function userFromToken(token) {
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// ICE servers for WebRTC. STUN alone fails for many people (strict NAT, mobile data, VPNs),
+// so add a TURN relay: Cloudflare (short-lived credentials) or any static TURN server.
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+const { CF_TURN_KEY_ID, CF_TURN_API_TOKEN, TURN_URLS, TURN_USERNAME, TURN_CREDENTIAL } = process.env;
+app.get('/api/ice', async (_req, res) => {
+  if (CF_TURN_KEY_ID && CF_TURN_API_TOKEN) {
+    try {
+      const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_KEY_ID}/credentials/generate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${CF_TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ttl: 86400 }),
+      });
+      if (!r.ok) throw new Error(`Cloudflare TURN ${r.status}`);
+      const { iceServers } = await r.json();
+      return res.json({ iceServers: [...STUN, ...[].concat(iceServers)] });
+    } catch (e) {
+      console.error('TURN credentials:', e.message);
+    }
+  }
+  if (TURN_URLS) {
+    const turn = { urls: TURN_URLS.split(',').map((u) => u.trim()), username: TURN_USERNAME, credential: TURN_CREDENTIAL };
+    return res.json({ iceServers: [...STUN, turn] });
+  }
+  res.json({ iceServers: STUN });
+});
 app.get('/api/config', (_req, res) => res.json({ freeLimit: FREE_LIMIT }));
 
 app.post('/api/auth/google', async (req, res) => {
+  let p;
   try {
     if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: 'GOOGLE_CLIENT_ID is not configured on the server' });
     const ticket = await googleClient.verifyIdToken({ idToken: req.body.credential, audience: GOOGLE_CLIENT_ID });
-    const p = ticket.getPayload();
-    const user = await User.findOneAndUpdate(
-      { googleId: p.sub },
-      { email: p.email, name: p.name, picture: p.picture },
-      { upsert: true, new: true }
-    );
-    res.json({ token: sign(user), user: publicUser(user) });
-  } catch (e) {
-    res.status(401).json({ error: 'Google sign-in failed' });
+    p = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ error: 'Google sign-in failed' });
   }
+  const profile = { email: p.email, name: p.name, picture: p.picture };
+  let user = await User.findOneAndUpdate({ googleId: p.sub }, profile, { new: true });
+  if (!user) {
+    // First sign-in. If they arrived through someone's invite link, that person earns VIP.
+    const referrer = typeof req.body.ref === 'string' ? await User.findOne({ refCode: req.body.ref.slice(0, 20) }) : null;
+    user = await User.create({ googleId: p.sub, ...profile, refCode: newCode(), referredBy: referrer?._id });
+    if (referrer) await rewardReferrer(referrer);
+  } else if (!user.refCode) {
+    user.refCode = newCode();
+    await user.save();
+  }
+  res.json({ token: sign(user), user: publicUser(user) });
 });
+
+async function rewardReferrer(referrer) {
+  const from = Math.max(Date.now(), referrer.vipUntil?.getTime() || 0);
+  referrer.vipUntil = new Date(from + VIP_DAYS * 86_400_000);
+  referrer.referrals = (referrer.referrals || 0) + 1;
+  await referrer.save();
+  // let them know right away if they're online, and badge their live sockets
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data.user?.id !== String(referrer._id)) continue;
+    s.data.user.vip = true;
+    s.emit('referral', { user: publicUser(referrer) });
+  }
+}
 
 app.get('/api/me', async (req, res) => {
   const user = await userFromToken((req.headers.authorization || '').replace('Bearer ', ''));
+  if (user && !user.refCode) {
+    user.refCode = newCode(); // accounts from before referrals existed
+    await user.save();
+  }
   res.json({ user: user && publicUser(user) });
 });
 
@@ -60,23 +129,20 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: origins }, maxHttpBufferSize: 1e5 });
 
 // ---- matchmaking -----------------------------------------------------------
-const queue = []; // sockets waiting for a partner
+const queue = []; // sockets waiting for a random partner
+const invites = new Map(); // invite code -> host socket waiting for their friend
 const partners = new Map(); // socket.id -> partner socket.id
-// Who has met whom, keyed by *person* (user id or guest id), not by socket, so reconnects
-// and refreshes don't reset it.
-const met = new Map(); // personKey -> Map(otherPersonKey -> last matched ts)
-const HARD_COOLDOWN_MS = 20_000; // never re-pair people within 20 seconds
-const SOFT_WINDOW_MS = 2 * 60 * 60_000; // strongly prefer someone new for 2 hours...
-const PATIENCE_MS = 15_000; // ...unless someone has been waiting this long (small crowds)
-const personKey = (s) => s.data.user?.id || s.data.guestId;
-const sinceMet = (a, b) => Date.now() - (met.get(personKey(a))?.get(personKey(b)) || 0);
-const waited = (s) => (queue.includes(s) ? Date.now() - s.data.queuedAt : 0);
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const removeFromQueue = (s) => {
   const i = queue.indexOf(s);
   if (i >= 0) queue.splice(i, 1);
 };
+
+function cancelInvite(s) {
+  if (s.data.invite && invites.get(s.data.invite) === s) invites.delete(s.data.invite);
+  s.data.invite = null;
+}
 
 function unpair(s, notify = true) {
   const pid = partners.get(s.id);
@@ -91,20 +157,14 @@ async function quotaState(s) {
   return { used: await getUsed(keysFor(s.data)), limit: FREE_LIMIT, unlimited: false };
 }
 
-// Random partner: never yourself (two tabs of one person), never someone from the last
-// 20 seconds, and preferably someone you haven't met in the last 2 hours. If nobody new is
-// around, fall back to a repeat only once somebody has been waiting a while.
+// Random partner: anyone else who is waiting.
 function pickPartner(s) {
-  const others = queue.filter((o) => o !== s && personKey(o) !== personKey(s) && sinceMet(s, o) > HARD_COOLDOWN_MS);
-  const fresh = others.filter((o) => sinceMet(s, o) > SOFT_WINDOW_MS);
-  if (fresh.length) return pickRandom(fresh);
-  const patient = others.filter((o) => Math.max(waited(s), waited(o)) >= PATIENCE_MS);
-  return patient.length ? pickRandom(patient) : null;
+  const others = queue.filter((o) => o !== s);
+  return others.length ? pickRandom(others) : null;
 }
 
 async function tryMatch(s) {
   if (!queue.includes(s)) {
-    s.data.queuedAt = Date.now();
     queue.push(s);
     s.emit('searching');
   }
@@ -112,19 +172,25 @@ async function tryMatch(s) {
   if (!candidate) return;
   removeFromQueue(candidate);
   removeFromQueue(s);
-  partners.set(s.id, candidate.id);
-  partners.set(candidate.id, s.id);
-  for (const [a, b] of [[s, candidate], [candidate, s]]) {
-    if (!met.has(personKey(a))) met.set(personKey(a), new Map());
-    met.get(personKey(a)).set(personKey(b), Date.now());
-  }
   // Free matches are counted when a pairing actually happens.
   await Promise.all([bump(keysFor(s.data)), bump(keysFor(candidate.data))]);
-  const card = (x) => ({ name: x.data.user?.name || 'Guest', picture: x.data.user?.picture || null });
-  s.emit('matched', { initiator: true, peer: card(candidate) });
-  candidate.emit('matched', { initiator: false, peer: card(s) });
-  s.emit('quota', await quotaState(s));
-  candidate.emit('quota', await quotaState(candidate));
+  await pair(s, candidate);
+}
+
+const card = (x) => ({
+  name: x.data.user?.name || 'Guest',
+  picture: x.data.user?.picture || null,
+  vip: !!x.data.user?.vip,
+  place: x.data.place,
+});
+
+async function pair(a, b, invite = false) {
+  partners.set(a.id, b.id);
+  partners.set(b.id, a.id);
+  a.emit('matched', { initiator: true, peer: card(b), invite });
+  b.emit('matched', { initiator: false, peer: card(a), invite });
+  a.emit('quota', await quotaState(a));
+  b.emit('quota', await quotaState(b));
 }
 
 // ---- presence: unique people connected (a person with two tabs counts once) ----
@@ -143,23 +209,13 @@ const broadcastOnline = () => {
 };
 app.get('/api/online', (_req, res) => res.json({ online: onlineCount() }));
 
-// Re-check waiting people every few seconds (so the "patience" fallback can kick in) and
-// forget old meetings.
-setInterval(() => {
-  for (const s of [...queue]) if (queue.includes(s)) tryMatch(s);
-  const cutoff = Date.now() - SOFT_WINDOW_MS;
-  for (const [k, m] of met) {
-    for (const [o, ts] of m) if (ts < cutoff) m.delete(o);
-    if (!m.size) met.delete(k);
-  }
-}, 5000).unref();
-
 io.use(async (socket, next) => {
-  const { token, guestId } = socket.handshake.auth || {};
+  const { token, guestId, tz } = socket.handshake.auth || {};
   const u = await userFromToken(token);
-  socket.data.user = u && { id: String(u._id), name: u.name, picture: u.picture };
+  socket.data.user = u && { id: String(u._id), name: u.name, picture: u.picture, vip: isVip(u) };
   socket.data.guestId = typeof guestId === 'string' ? guestId.slice(0, 64) : null;
   socket.data.ip = String(socket.handshake.headers['x-forwarded-for'] || socket.handshake.address).split(',')[0].trim();
+  socket.data.place = placeOf(socket.data.ip, tz);
   if (!socket.data.user && !socket.data.guestId) return next(new Error('guestId required'));
   next();
 });
@@ -169,16 +225,36 @@ io.on('connection', async (socket) => {
   socket.emit('online', onlineCount());
   broadcastOnline();
 
-  socket.on('find', async () => {
+  socket.on('find', async (opts) => {
     unpair(socket);
     removeFromQueue(socket);
+    cancelInvite(socket);
+    // Joining a friend's private invite: pair directly, and it doesn't use a free session.
+    if (opts?.invite) {
+      const host = invites.get(String(opts.invite));
+      if (!host || host === socket) return socket.emit('invite-missing');
+      cancelInvite(host);
+      return pair(host, socket, true);
+    }
     const q = await quotaState(socket);
     if (!q.unlimited && q.used >= q.limit) return socket.emit('limit', q);
     tryMatch(socket);
   });
 
+  // Start a private room and wait for a friend to open the link.
+  socket.on('invite', () => {
+    unpair(socket);
+    removeFromQueue(socket);
+    cancelInvite(socket);
+    const code = newCode(6);
+    invites.set(code, socket);
+    socket.data.invite = code;
+    socket.emit('invite', { code });
+  });
+
   socket.on('leave', () => {
     removeFromQueue(socket);
+    cancelInvite(socket);
     unpair(socket);
   });
 
@@ -217,6 +293,7 @@ io.on('connection', async (socket) => {
   socket.on('disconnect', () => {
     broadcastOnline();
     removeFromQueue(socket);
+    cancelInvite(socket);
     unpair(socket);
   });
 });

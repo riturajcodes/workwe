@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
-import { Avatar, HeroVisual, Icon, Logo } from './components.jsx';
+import { Avatar, HeroVisual, Icon, Logo, VipBadge } from './components.jsx';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -53,7 +53,7 @@ const Chars = ({ text }) =>
     </span>
   ));
 
-export default function Landing({ room, user, theme, toggleTheme, openLogin, signOut }) {
+export default function Landing({ room, user, theme, toggleTheme, openLogin, signOut, onInvite }) {
   const root = useRef(null);
   const cursor = useRef(null);
   const lenisRef = useRef(null);
@@ -295,7 +295,7 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
           <div className="lright">
             <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme"><Icon n={theme === 'dark' ? 'sun' : 'moon'} size={16} /></button>
             {user ? (
-              <div className="me"><Avatar name={user.name} picture={user.picture} size={28} /><span>{user.name?.split(' ')[0]}</span><button className="link" onClick={signOut}>Sign out</button></div>
+              <div className="me"><Avatar name={user.name} picture={user.picture} size={28} />{user.vip && <VipBadge />}<span>{user.name?.split(' ')[0]}</span><button className="link" onClick={signOut}>Sign out</button></div>
             ) : (
               <button className="btn outline sm" onClick={openLogin}>Log in</button>
             )}
@@ -316,10 +316,10 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
               <p className="lead">Get matched with a real person for a live co-working session. See each other, share screens, and skip to someone new whenever you like.</p>
               <div className="cta-row">
                 <Join />
+                <button className="btn text lg" onClick={onInvite}><Icon n="users" size={16} />Invite a friend</button>
                 {!user && <button className="btn text lg" onClick={openLogin}>Log in</button>}
               </div>
-              <p className="meta">{user ? 'Unlimited sessions while signed in.' : `${limit} free sessions a day. No account needed.`}</p>
-              {room.mediaError && <p className="hint warn">{room.mediaError}</p>}
+              <p className="meta">{user ? 'Unlimited sessions while signed in.' : `${limit} free sessions a day. No account needed.`} Invite a friend who signs up and get VIP for 30 days.</p>
               {room.messages.at(-1)?.system && <p className="hint">{room.messages.at(-1).text}</p>}
             </div>
           </div>
@@ -424,7 +424,7 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
                 ['video', 'Video and audio', 'Low-latency, peer-to-peer calls with echo cancellation and noise suppression.'],
                 ['screen', 'Two-way screen sharing', 'Share your screen while your partner shares theirs. Cameras stay in view.'],
                 ['chat', 'Live chat', 'Drop links and notes without interrupting each other.'],
-                ['shuffle', 'Fresh pairings', 'Matches are random, and you won’t keep meeting the same people.'],
+                ['shuffle', 'Random pairings', 'You’re matched with whoever is around, instantly. Skip any time.'],
                 ['smile', 'Quick reactions', 'Send a cheer to your partner. You both see the same animation.'],
                 ['lock', 'Private by design', 'Video goes directly between you and your partner. Nothing is recorded.'],
               ].map(([ic, t, d]) => (
