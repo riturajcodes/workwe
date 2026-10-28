@@ -20,7 +20,7 @@ const timeZone = () => {
 };
 export const connectSocket = () => io(SERVER || undefined, { auth: { token: getToken(), guestId: getGuestId(), tz: timeZone() } });
 
-// Who referred this browser (from an invite link); sent along with the first Google sign-in.
+// The sign-up link this browser arrived on; sent along with the first Google sign-in.
 export const getRef = () => localStorage.getItem('workwe_ref');
 export const setRef = (r) => (r ? localStorage.setItem('workwe_ref', r) : localStorage.removeItem('workwe_ref'));
 
@@ -46,4 +46,3 @@ const getJson = async (path) => {
   return r.ok ? r.json() : null;
 };
 export const fetchInvite = (code) => getJson(`/api/invite/${encodeURIComponent(code)}`);
-export const fetchReferrer = (code) => getJson(`/api/ref/${encodeURIComponent(code)}`);

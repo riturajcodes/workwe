@@ -162,10 +162,11 @@ function Burst({ emoji, seed }) {
   );
 }
 
-export function Controls({ mic, cam, sharing, onMic, onCam, onShare, onNext, onEnd, canShare, onReact, chatOpen, unread, onChat }) {
+// `lobby` is the trimmed set shown while searching: just mic, camera and screen.
+export function Controls({ mic, cam, sharing, onMic, onCam, onShare, onNext, onEnd, canShare, onReact, chatOpen, unread, onChat, lobby = false }) {
   const [picker, setPicker] = useState(false);
   return (
-    <div className="controls">
+    <div className={`controls ${lobby ? 'lobby' : ''}`}>
       {picker && (
         <div className="picker">
           {REACTIONS.map((e) => (
@@ -176,11 +177,15 @@ export function Controls({ mic, cam, sharing, onMic, onCam, onShare, onNext, onE
       <button className={`ctl ${mic ? '' : 'off'}`} onClick={onMic} title={mic ? 'Mute' : 'Unmute'}><Icon n="mic" />{!mic && <i className="slash" />}</button>
       <button className={`ctl ${cam ? '' : 'off'}`} onClick={onCam} title={cam ? 'Turn camera off' : 'Turn camera on'}><Icon n="cam" />{!cam && <i className="slash" />}</button>
       {canShare && <button className={`ctl ${sharing ? 'on' : ''}`} onClick={onShare} title={sharing ? 'Stop sharing' : 'Share your screen'}><Icon n="screen" /></button>}
-      <button className={`ctl ${picker ? 'on' : ''}`} onClick={() => setPicker((o) => !o)} title="Send a reaction"><Icon n="smile" /></button>
-      <button className={`ctl ${chatOpen ? 'on' : ''}`} onClick={onChat} title={chatOpen ? 'Hide chat' : 'Show chat'}><Icon n="chat" />{unread && <i className="badge" />}</button>
-      <span className="sep" />
-      <button className="ctl pill" onClick={onNext}>Next<Icon n="next" size={16} /></button>
-      <button className="ctl danger" onClick={onEnd} title="Leave"><Icon n="end" /></button>
+      {!lobby && (
+        <>
+          <button className={`ctl ${picker ? 'on' : ''}`} onClick={() => setPicker((o) => !o)} title="Send a reaction"><Icon n="smile" /></button>
+          <button className={`ctl ${chatOpen ? 'on' : ''}`} onClick={onChat} title={chatOpen ? 'Hide chat' : 'Show chat'}><Icon n="chat" />{unread && <i className="badge" />}</button>
+          <span className="sep" />
+          <button className="ctl pill" onClick={onNext}>Next<Icon n="next" size={16} /></button>
+          <button className="ctl danger" onClick={onEnd} title="Leave"><Icon n="end" /></button>
+        </>
+      )}
     </div>
   );
 }

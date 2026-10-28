@@ -92,7 +92,7 @@ app.post('/api/auth/google', async (req, res) => {
   const profile = { email: p.email, name: p.name, picture: p.picture };
   let user = await User.findOneAndUpdate({ googleId: p.sub }, profile, { new: true });
   if (!user) {
-    // First sign-in. If they arrived through someone's referral link, that person earns VIP.
+    // First sign-in. If they came in through someone's sign-up link, that person earns VIP.
     const referrer = typeof req.body.ref === 'string' ? await User.findOne({ refCode: req.body.ref.slice(0, 20) }) : null;
     user = await User.create({ googleId: p.sub, ...profile, refCode: newCode(), referredBy: referrer?._id });
     if (referrer) await rewardReferrer(referrer);
@@ -139,13 +139,6 @@ app.get('/api/invite/:code', async (req, res) => {
   const inv = await findInvite(req.params.code);
   if (!inv) return res.status(404).json({ error: 'expired' });
   res.json(inviteInfo(inv));
-});
-
-// Who a referral link belongs to, for the sign-up screen.
-app.get('/api/ref/:code', async (req, res) => {
-  const u = await User.findOne({ refCode: String(req.params.code).slice(0, 20) });
-  if (!u) return res.status(404).json({ error: 'not found' });
-  res.json({ name: u.name, picture: u.picture });
 });
 
 const server = http.createServer(app);

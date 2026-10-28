@@ -352,14 +352,14 @@ export function useWorkRoom(authKey) {
     sendStatus({ screen: false, screenId: null });
   }, [stopScreenTracks, sendStatus]);
 
+  // Works mid-call or while searching; a share started early is sent as soon as you're matched (see createPc).
   const startShare = useCallback(async () => {
-    const pc = pcRef.current;
-    if (!pc) return;
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
       screenRef.current = stream;
       setScreenStream(stream);
-      screenSendersRef.current = stream.getTracks().map((t) => pc.addTrack(t, stream));
+      const pc = pcRef.current;
+      if (pc) screenSendersRef.current = stream.getTracks().map((t) => pc.addTrack(t, stream));
       stream.getVideoTracks()[0].onended = () => stopShare();
       sendStatus({ screen: true, screenId: stream.id });
     } catch (e) {

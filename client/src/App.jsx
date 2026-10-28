@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { fetchInvite, fetchMe, fetchReferrer, getRef, getToken, googleLogin, setRef, setToken } from './api.js';
+import { fetchInvite, fetchMe, getToken, googleLogin, setRef, setToken } from './api.js';
 import { placeLabel, useWorkRoom } from './useWorkRoom.js';
 import { Avatar, Chat, Controls, GoogleButton, Icon, Logo, ReactionLayer, VipBadge, Video } from './components.jsx';
 import Landing from './Landing.jsx';
@@ -13,7 +13,8 @@ const MEDIA_COPY = {
   other: ['Couldn’t start your camera', 'Something went wrong starting your camera and microphone. Check them, then try again.'],
 };
 
-// Two kinds of links: /?invite=<code> (co-work with me, valid 24h) and /?ref=<code> (sign up, I get VIP).
+// Two kinds of links: /?invite=<code> (co-work with me, valid 24h) and /?ref=<code> (a plain sign-up
+// link; the sharer earns VIP if it brings in a new account, but the visitor isn't told any of that).
 // Read them once, then tidy the URL.
 const LINK = (() => {
   const q = new URLSearchParams(location.search);
@@ -53,7 +54,8 @@ function LinkBox({ url, label, copied, onCopy, shareTitle }) {
 }
 
 function VipChip({ user, onClick }) {
-  if (user?.vip) {
+  if (!user) return null; // only signed-in users can earn VIP
+  if (user.vip) {
     return <button className="vip-chip on" onClick={onClick} title={`VIP until ${longDate(user.vipUntil)}`}><VipBadge />{daysLeft(user.vipUntil)}d left</button>;
   }
   return <button className="vip-chip" onClick={onClick}>Get VIP</button>;
@@ -62,8 +64,6 @@ function VipChip({ user, onClick }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(LINK.invite && { code: LINK.invite, loading: true });
-  const [referrer, setReferrer] = useState(null); // who referred this visitor, for the sign-up screen
-  const [refWelcome, setRefWelcome] = useState(!!LINK.ref);
   const [vipOpen, setVipOpen] = useState(false);
   const [copied, copy] = useCopy();
   const [slow, setSlow] = useState(false); // still not connected after a while
@@ -73,7 +73,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(() => window.matchMedia('(min-width: 901px)').matches);
   const [seen, setSeen] = useState(0);
   const [confirmNext, setConfirmNext] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(!!LINK.ref); // a sign-up link opens sign-in straight away
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('workwe_theme') || 'light'; } catch { return 'light'; }
   });
@@ -98,8 +98,6 @@ export default function App() {
   useEffect(() => {
     if (getToken()) fetchMe().then((u) => (u ? setUser(u) : setToken(null))).catch(() => {});
     if (LINK.invite) fetchInvite(LINK.invite).then((info) => setPendingInvite(info ? { ...info, loading: false } : { code: LINK.invite, expired: true })).catch(() => {});
-    const ref = getRef();
-    if (ref && !getToken()) fetchReferrer(ref).then((r) => (r ? setReferrer(r) : setRef(null))).catch(() => {});
   }, []);
 
   const onCredential = useCallback(async (credential) => {
@@ -107,8 +105,6 @@ export default function App() {
       const { token, user } = await googleLogin(credential);
       setToken(token);
       setRef(null);
-      setReferrer(null);
-      setRefWelcome(false);
       setUser(user);
       setAuthError(null);
       room.setLimitHit(false);
@@ -139,7 +135,7 @@ export default function App() {
 
   const inviteLink = room.invite && `${location.origin}/?invite=${room.invite.code}`;
   const referralLink = user?.refCode && `${location.origin}/?ref=${user.refCode}`;
-  const openVip = () => (user ? setVipOpen(true) : setLoginOpen(true));
+  const openVip = () => setVipOpen(true);
 
   const inRoom = room.phase !== 'idle';
   // the landing page scrolls the window (for smooth-scroll + scroll animations); the call room is fixed-height
@@ -181,9 +177,15 @@ export default function App() {
         <main className="searching">
           <div className={`self ${user?.vip ? 'vip' : ''}`}>
             <Video stream={room.localStream} muted mirror />
-            {!room.localStream && <div className="placeholder"><Avatar name={user?.name || 'You'} picture={user?.picture} size={80} /></div>}
+            {(!room.localStream || !room.cam) && <div className="placeholder"><Avatar name={user?.name || 'You'} picture={user?.picture} size={80} /></div>}
             <div className="scan" />
-            <span className="tag">You{user?.vip && <VipBadge />}</span>
+            <span className="tag">You{user?.vip && <VipBadge />}{!room.mic && ' · muted'}</span>
+            {sharing && (
+              <div className="screen-pip">
+                <Video stream={room.screenStream} muted className="contain" />
+                <span className="tag">Your screen</span>
+              </div>
+            )}
           </div>
           {room.invite?.isOwner ? (
             <>
@@ -203,7 +205,12 @@ export default function App() {
               <p>{room.notice || 'Check your camera and lighting while we look for someone.'}</p>
             </>
           )}
-          {sharing && <p className="hint sharing"><i />Still sharing your screen. It carries over to your next partner. <button className="link" onClick={room.stopShare}>Stop</button></p>}
+          {/* set up mic, camera and screen before you're matched; it all carries into the call */}
+          <Controls
+            lobby mic={room.mic} cam={room.cam} sharing={sharing} canShare={!!navigator.mediaDevices?.getDisplayMedia}
+            onMic={room.toggleMic} onCam={room.toggleCam} onShare={sharing ? room.stopShare : room.startShare}
+          />
+          {sharing && <p className="hint sharing"><i />Sharing your screen. Your partner will see it as soon as you’re matched.</p>}
           <button className="btn outline" onClick={room.stop}>Cancel</button>
         </main>
       )}
@@ -330,16 +337,16 @@ export default function App() {
             {user.vip ? (
               <>
                 <h2>You’re VIP until {longDate(user.vipUntil)}</h2>
-                <p><b>{daysLeft(user.vipUntil)} {daysLeft(user.vipUntil) === 1 ? 'day' : 'days'} left.</b> Each new friend who signs up adds another 30 days.</p>
+                <p><b>{daysLeft(user.vipUntil)} {daysLeft(user.vipUntil) === 1 ? 'day' : 'days'} left.</b> Share your sign-up link again: each new account it brings in adds another 30 days.</p>
               </>
             ) : (
               <>
                 <h2>Get VIP free for 30 days</h2>
-                <p>Share your referral link. When a friend signs up with it for the first time, <b>you</b> get VIP for 30 days: a glowing frame and a VIP badge on your video.</p>
+                <p>Share your sign-up link. When someone creates a new WorkWe account with it, you get VIP for 30 days: a glowing frame and a VIP badge on your video.</p>
               </>
             )}
-            <LinkBox url={referralLink} label="Referral link" copied={copied === 'ref'} onCopy={() => copy(referralLink, 'ref')} shareTitle="Join me on WorkWe" />
-            <p className="hint">{user.referrals ? `${user.referrals} ${user.referrals === 1 ? 'friend has' : 'friends have'} signed up with your link. ` : ''}Only new accounts count. Your friend gets a WorkWe account; the VIP reward is yours.</p>
+            <LinkBox url={referralLink} label="Sign-up link" copied={copied === 'ref'} onCopy={() => copy(referralLink, 'ref')} shareTitle="Join WorkWe" />
+            <p className="hint">{user.referrals ? `${user.referrals} ${user.referrals === 1 ? 'person has' : 'people have'} signed up with your link. ` : ''}Only new accounts count.</p>
             <button className="link" onClick={() => setVipOpen(false)}>Close</button>
           </div>
         </div>
@@ -363,7 +370,7 @@ export default function App() {
           <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <span className="vip-hero"><VipBadge /></span>
             <h2>You’re VIP for 30 days</h2>
-            <p>A friend signed up from your link. Your video now has a glowing frame and a VIP badge until <b>{longDate(room.reward.vipUntil)}</b> ({daysLeft(room.reward.vipUntil)} days). Refer more friends to extend it.</p>
+            <p>Someone signed up with your link. Your video now has a glowing frame and a VIP badge until <b>{longDate(room.reward.vipUntil)}</b> ({daysLeft(room.reward.vipUntil)} days). Refer more friends to extend it.</p>
             <button className="btn primary" autoFocus onClick={() => room.setReward(null)}>Nice</button>
           </div>
         </div>
@@ -379,19 +386,6 @@ export default function App() {
               <button className="btn outline" onClick={room.clearMediaError}>Not now</button>
               <button className="btn primary" autoFocus onClick={() => { room.clearMediaError(); room.find(); }}>Allow camera & mic</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {refWelcome && referrer && !user && !loginOpen && !room.limitHit && !inRoom && !pendingInvite && (
-        <div className="modal-bg" onClick={() => setRefWelcome(false)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <Avatar name={referrer.name} picture={referrer.picture} size={56} />
-            <h2 className="after-avatar">{referrer.name} invited you to WorkWe</h2>
-            <p>Co-work live with real people. Sign up with Google using {referrer.name.split(' ')[0]}’s referral for unlimited sessions every day.</p>
-            <GoogleButton onCredential={onCredential} />
-            {authError && <p className="hint warn">{authError}</p>}
-            <button className="link" onClick={() => setRefWelcome(false)}>Look around first</button>
           </div>
         </div>
       )}
@@ -412,7 +406,6 @@ export default function App() {
               </>
             )}
             <GoogleButton onCredential={onCredential} />
-            {referrer && <div className="ref-note"><Avatar name={referrer.name} picture={referrer.picture} size={20} />Signing up with {referrer.name}’s referral</div>}
             {authError && <p className="hint warn">{authError}</p>}
             <button className="link" onClick={() => { setLoginOpen(false); room.setLimitHit(false); }}>{room.limitHit ? 'Not now' : 'Close'}</button>
           </div>

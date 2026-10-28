@@ -145,6 +145,11 @@ h1 em { font-style: normal; color: var(--accent); }
 @keyframes breathe { 0%, 100% { opacity: .15; } 50% { opacity: .9; } }
 .searching h2 { font-weight: 600; font-size: 22px; letter-spacing: -.02em; }
 .searching p { color: var(--muted); margin: 6px 0 20px; font-size: 14.5px; max-width: 420px; }
+.controls.lobby { margin: 0 0 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.searching .hint.sharing { margin: -4px 0 16px; }
+.screen-pip { position: absolute; right: 12px; bottom: 12px; width: 36%; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--line2); box-shadow: 0 10px 30px rgba(0,0,0,.4); z-index: 2; }
+.screen-pip video { width: 100%; height: 100%; display: block; }
+.screen-pip .tag { left: 6px; bottom: 6px; font-size: 11px; padding: 2px 6px; }
 
 /* ---- room ---- */
 .room { flex: 1; display: grid; grid-template-columns: 1fr; gap: 14px; padding: 0 20px 20px; min-height: 0; position: relative; z-index: 1; }
@@ -239,7 +244,7 @@ h1 em { font-style: normal; color: var(--accent); }
 .invite-link input:focus { border-color: var(--accent); }
 .searching .hint { max-width: 420px; margin: 4px 0 18px; }
 .hint.sharing { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); }
-.hint.sharing i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+.hint.sharing i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
 .vip-badge { display: inline-grid; place-items: center; margin-left: 6px; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: #3a2400; background: linear-gradient(135deg, #ffe29a, #ffb547 55%, #ff8a3d); box-shadow: 0 0 10px rgba(255, 181, 71, .55); vertical-align: 1px; }
 .me .vip-badge { margin-left: -2px; }
 .tile.vip, .self.vip { border-color: transparent; box-shadow: 0 0 0 2px #ffb547, 0 0 22px 4px rgba(255, 170, 60, .55), 0 0 60px 10px rgba(255, 120, 200, .25); animation: vipglow 3s ease-in-out infinite; }
@@ -252,7 +257,6 @@ h1 em { font-style: normal; color: var(--accent); }
 :root[data-theme='dark'] .vip-chip, :root:not([data-theme]) .vip-chip { color: #ffd38a; }
 .vip-modal .invite-link { margin-top: 4px; }
 .modal .after-avatar { margin-top: 14px; }
-.ref-note { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 6px 12px 6px 6px; border-radius: 99px; background: var(--tint); color: var(--tint-ink); font-size: 13px; font-weight: 500; }
 @media (prefers-reduced-motion: reduce) { .tile.vip, .self.vip { animation: none; } }
 .perm-ico { display: inline-flex; gap: 6px; padding: 12px 14px; margin-bottom: 18px; border-radius: 14px; background: var(--tint); color: var(--tint-ink); }
 
@@ -280,14 +284,16 @@ h1 em { font-style: normal; color: var(--accent); }
   .room.with-chat .chat { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; height: min(70dvh, 560px); border-radius: 18px 18px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -20px 60px rgba(0,0,0,.35); animation: sheet .22s cubic-bezier(.2,.8,.3,1); }
   .chat input { font-size: 16px; } /* stops iOS zooming in on focus */
   .searching { padding: 0 16px calc(20px + env(safe-area-inset-bottom)); }
-  .self { width: min(100%, 420px); height: auto; aspect-ratio: 3 / 4; max-height: calc(100dvh - 300px); max-width: none; }
+  .self { width: min(100%, 420px); height: auto; aspect-ratio: 3 / 4; max-height: calc(100dvh - 370px); max-width: none; }
+  .controls.lobby { width: auto; }
   .cols3, .grid-feat { grid-template-columns: 1fr; }
   .cols3 { gap: 32px; }
 }
 @keyframes sheet { from { transform: translateY(100%); } }
 @media (max-width: 900px) and (max-height: 500px) {
   /* phone in landscape: size the preview by height instead */
-  .self { width: auto; height: calc(100dvh - 200px); aspect-ratio: 4 / 3; max-height: none; margin-bottom: 12px; }
+  .self { width: auto; height: calc(100dvh - 260px); aspect-ratio: 4 / 3; max-height: none; margin-bottom: 12px; }
+  .controls.lobby { margin-bottom: 8px; }
   .searching h2 { font-size: 18px; }
   .searching p { margin: 4px 0 10px; }
   .room.with-chat .chat { height: 85dvh; }
