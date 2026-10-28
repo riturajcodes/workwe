@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { Server } from 'socket.io';
-import { User } from './models.js';
+import { Invite, User } from './models.js';
 import { FREE_LIMIT, keysFor, getUsed, bump } from './quota.js';
 
 const { MONGODB_URI, JWT_SECRET, GOOGLE_CLIENT_ID, CLIENT_ORIGIN = 'http://localhost:5173' } = process.env;
@@ -92,7 +92,7 @@ app.post('/api/auth/google', async (req, res) => {
   const profile = { email: p.email, name: p.name, picture: p.picture };
   let user = await User.findOneAndUpdate({ googleId: p.sub }, profile, { new: true });
   if (!user) {
-    // First sign-in. If they arrived through someone's invite link, that person earns VIP.
+    // First sign-in. If they arrived through someone's referral link, that person earns VIP.
     const referrer = typeof req.body.ref === 'string' ? await User.findOne({ refCode: req.body.ref.slice(0, 20) }) : null;
     user = await User.create({ googleId: p.sub, ...profile, refCode: newCode(), referredBy: referrer?._id });
     if (referrer) await rewardReferrer(referrer);
@@ -125,12 +125,36 @@ app.get('/api/me', async (req, res) => {
   res.json({ user: user && publicUser(user) });
 });
 
+const INVITE_TTL_MS = 24 * 60 * 60_000;
+const inviteInfo = (inv) => ({
+  code: inv.code,
+  host: { name: inv.ownerName || 'A friend', picture: inv.ownerPicture || null },
+  expiresAt: new Date(inv.createdAt.getTime() + INVITE_TTL_MS),
+});
+async function findInvite(code) {
+  const inv = typeof code === 'string' ? await Invite.findOne({ code: code.slice(0, 20) }) : null;
+  return inv && inv.createdAt.getTime() + INVITE_TTL_MS > Date.now() ? inv : null; // TTL cleanup can lag
+}
+app.get('/api/invite/:code', async (req, res) => {
+  const inv = await findInvite(req.params.code);
+  if (!inv) return res.status(404).json({ error: 'expired' });
+  res.json(inviteInfo(inv));
+});
+
+// Who a referral link belongs to, for the sign-up screen.
+app.get('/api/ref/:code', async (req, res) => {
+  const u = await User.findOne({ refCode: String(req.params.code).slice(0, 20) });
+  if (!u) return res.status(404).json({ error: 'not found' });
+  res.json({ name: u.name, picture: u.picture });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: origins }, maxHttpBufferSize: 1e5 });
 
 // ---- matchmaking -----------------------------------------------------------
 const queue = []; // sockets waiting for a random partner
-const invites = new Map(); // invite code -> host socket waiting for their friend
+const rooms = new Map(); // invite code -> Set of sockets waiting on that link
+const personKey = (s) => s.data.user?.id || s.data.guestId;
 const partners = new Map(); // socket.id -> partner socket.id
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -140,8 +164,37 @@ const removeFromQueue = (s) => {
 };
 
 function cancelInvite(s) {
-  if (s.data.invite && invites.get(s.data.invite) === s) invites.delete(s.data.invite);
+  const room = s.data.invite && rooms.get(s.data.invite);
+  if (room) {
+    room.delete(s);
+    if (!room.size) rooms.delete(s.data.invite);
+  }
   s.data.invite = null;
+}
+
+// Wait on an invite link; pair as soon as someone else (a different person) is waiting on it too.
+async function joinInvite(s, inv) {
+  const room = rooms.get(inv.code) || new Set();
+  const other = [...room].find((o) => personKey(o) !== personKey(s));
+  if (other) {
+    cancelInvite(other);
+    return pair(other, s, true);
+  }
+  room.add(s);
+  rooms.set(inv.code, room);
+  s.data.invite = inv.code;
+  const isOwner = inv.owner === personKey(s);
+  s.emit('invite', { ...inviteInfo(inv), isOwner });
+  // The friend got here first: tell the host, wherever they are in the app.
+  if (!isOwner) notifyHost(inv, s);
+}
+
+function notifyHost(inv, friend) {
+  for (const o of io.sockets.sockets.values()) {
+    if (personKey(o) === inv.owner && o.data.invite !== inv.code) {
+      o.emit('friend-waiting', { code: inv.code, name: friend.data.user?.name || 'Your friend' });
+    }
+  }
 }
 
 function unpair(s, notify = true) {
@@ -224,32 +277,41 @@ io.on('connection', async (socket) => {
   socket.emit('quota', await quotaState(socket));
   socket.emit('online', onlineCount());
   broadcastOnline();
+  // A friend may already be waiting on one of this person's links.
+  for (const [code, room] of rooms) {
+    const friend = [...room].find((o) => personKey(o) !== personKey(socket));
+    if (!friend) continue;
+    const inv = await findInvite(code);
+    if (inv?.owner === personKey(socket)) notifyHost(inv, friend);
+  }
 
   socket.on('find', async (opts) => {
     unpair(socket);
     removeFromQueue(socket);
     cancelInvite(socket);
-    // Joining a friend's private invite: pair directly, and it doesn't use a free session.
+    // Joining a private invite link: no queue, and it doesn't use a free session.
     if (opts?.invite) {
-      const host = invites.get(String(opts.invite));
-      if (!host || host === socket) return socket.emit('invite-missing');
-      cancelInvite(host);
-      return pair(host, socket, true);
+      const inv = await findInvite(opts.invite);
+      if (!inv) return socket.emit('invite-missing');
+      return joinInvite(socket, inv);
     }
     const q = await quotaState(socket);
     if (!q.unlimited && q.used >= q.limit) return socket.emit('limit', q);
     tryMatch(socket);
   });
 
-  // Start a private room and wait for a friend to open the link.
-  socket.on('invite', () => {
+  // Make (or reuse today's) invite link and wait on it.
+  socket.on('invite', async () => {
     unpair(socket);
     removeFromQueue(socket);
     cancelInvite(socket);
-    const code = newCode(6);
-    invites.set(code, socket);
-    socket.data.invite = code;
-    socket.emit('invite', { code });
+    const owner = personKey(socket);
+    const fresh = new Date(Date.now() - INVITE_TTL_MS / 2); // reuse a link with at least 12h left
+    let inv = await Invite.findOne({ owner, createdAt: { $gt: fresh } }).sort({ createdAt: -1 });
+    if (!inv) {
+      inv = await Invite.create({ code: newCode(6), owner, ownerName: socket.data.user?.name, ownerPicture: socket.data.user?.picture });
+    }
+    joinInvite(socket, inv);
   });
 
   socket.on('leave', () => {

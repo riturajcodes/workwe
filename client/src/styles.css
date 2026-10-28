@@ -46,7 +46,7 @@ code { font-family: var(--mono); background: var(--surface2); padding: 1px 6px; 
 @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
 .status.warn { color: var(--amber); }
 .me { display: flex; align-items: center; gap: 9px; font-weight: 500; }
-.link { color: var(--dim); font-size: 13px; }
+.link { color: var(--dim); font-size: 13px; white-space: nowrap; }
 .link:hover { color: var(--ink); }
 .avatar { border-radius: 50%; object-fit: cover; }
 .avatar.fallback { display: grid; place-items: center; background: var(--surface3); color: #d4d4d8; font-weight: 600; }
@@ -224,7 +224,13 @@ h1 em { font-style: normal; color: var(--accent); }
 .modal .link { margin-top: 18px; }
 .modal-actions { display: flex; gap: 8px; width: 100%; }
 .modal-actions .btn { flex: 1; }
-.gbtn { min-height: 44px; }
+.gbtn { min-height: 44px; width: 100%; max-width: 300px; display: flex; justify-content: center; }
+@media (max-width: 420px) { .modal { padding: 28px 20px 22px; } }
+@media (max-width: 560px) {
+  .lnav { padding: 0 14px; }
+  .lright { gap: 8px; }
+  .lright .me > span, .lright:has(.me) > .btn.primary { display: none; } /* the hero's Join button is right below */
+}
 
 /* ---- location, invites, VIP ---- */
 .place { position: absolute; left: 12px; top: 12px; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 9px; font-size: 12px; font-weight: 500; border-radius: 6px; background: var(--tag-bg); backdrop-filter: blur(8px); color: var(--tag-ink); border: 1px solid var(--line); }
@@ -239,6 +245,14 @@ h1 em { font-style: normal; color: var(--accent); }
 .tile.vip, .self.vip { border-color: transparent; box-shadow: 0 0 0 2px #ffb547, 0 0 22px 4px rgba(255, 170, 60, .55), 0 0 60px 10px rgba(255, 120, 200, .25); animation: vipglow 3s ease-in-out infinite; }
 @keyframes vipglow { 50% { box-shadow: 0 0 0 2px #ff8ad8, 0 0 28px 6px rgba(255, 120, 200, .5), 0 0 70px 14px rgba(255, 170, 60, .28); } }
 .vip-hero { margin-bottom: 16px; transform: scale(1.8); }
+.vip-chip { display: inline-flex; align-items: center; gap: 2px; height: 30px; padding: 0 11px; border-radius: 99px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #8a4b00; background: linear-gradient(135deg, rgba(255,226,154,.45), rgba(255,138,61,.25)); box-shadow: inset 0 0 0 1px rgba(255,181,71,.6); }
+.vip-chip:hover { box-shadow: inset 0 0 0 1px #ffb547, 0 0 14px rgba(255,181,71,.4); }
+.vip-chip.on { padding-left: 4px; gap: 6px; }
+.vip-chip.on .vip-badge { margin: 0; }
+:root[data-theme='dark'] .vip-chip, :root:not([data-theme]) .vip-chip { color: #ffd38a; }
+.vip-modal .invite-link { margin-top: 4px; }
+.modal .after-avatar { margin-top: 14px; }
+.ref-note { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 6px 12px 6px 6px; border-radius: 99px; background: var(--tint); color: var(--tint-ink); font-size: 13px; font-weight: 500; }
 @media (prefers-reduced-motion: reduce) { .tile.vip, .self.vip { animation: none; } }
 .perm-ico { display: inline-flex; gap: 6px; padding: 12px 14px; margin-bottom: 18px; border-radius: 14px; background: var(--tint); color: var(--tint-ink); }
 

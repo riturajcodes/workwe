@@ -23,5 +23,15 @@ usageSchema.index({ key: 1, day: 1 }, { unique: true });
 // Old counters are useless after a day or two; let Mongo clean them up.
 usageSchema.add({ createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 48 } });
 
+// A private invite link. It stays valid for 24 hours: whoever opens it waits for the other.
+const inviteSchema = new mongoose.Schema({
+  code: { type: String, unique: true, required: true },
+  owner: { type: String, required: true, index: true }, // person key: user id or guest id
+  ownerName: String,
+  ownerPicture: String,
+  createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 },
+});
+
 export const User = mongoose.model('User', userSchema);
+export const Invite = mongoose.model('Invite', inviteSchema);
 export const Usage = mongoose.model('Usage', usageSchema);

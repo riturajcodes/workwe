@@ -39,7 +39,7 @@ export function GoogleButton({ onCredential }) {
       if (window.google?.accounts?.id) {
         clearInterval(t);
         window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: (r) => onCredential(r.credential) });
-        window.google.accounts.id.renderButton(box.current, { theme: document.documentElement.dataset.theme === 'light' ? 'outline' : 'filled_black', size: 'large', shape: 'rectangular', text: 'continue_with', width: 300 });
+        window.google.accounts.id.renderButton(box.current, { theme: document.documentElement.dataset.theme === 'light' ? 'outline' : 'filled_black', size: 'large', shape: 'rectangular', text: 'continue_with', width: Math.min(300, box.current.clientWidth || 300) });
         setReady(true);
       } else if (++tries > 50) clearInterval(t);
     }, 100);

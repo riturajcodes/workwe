@@ -40,3 +40,10 @@ export async function fetchMe() {
   const r = await fetch(`${SERVER}/api/me`, { headers: { Authorization: `Bearer ${t}` } });
   return (await r.json()).user;
 }
+
+const getJson = async (path) => {
+  const r = await fetch(`${SERVER}${path}`);
+  return r.ok ? r.json() : null;
+};
+export const fetchInvite = (code) => getJson(`/api/invite/${encodeURIComponent(code)}`);
+export const fetchReferrer = (code) => getJson(`/api/ref/${encodeURIComponent(code)}`);

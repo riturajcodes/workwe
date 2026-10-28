@@ -36,7 +36,8 @@ export function useWorkRoom(authKey) {
   const [bursts, setBursts] = useState([]);
   const [online, setOnline] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [inviteCode, setInviteCode] = useState(null); // set while waiting for a friend to open our link
+  const [invite, setInvite] = useState(null); // { code, host, expiresAt, isOwner } while waiting on an invite link
+  const [friendWaiting, setFriendWaiting] = useState(null); // { code, name }: someone opened our link
   const [inviteMissing, setInviteMissing] = useState(false);
   const [reward, setReward] = useState(null); // the updated user after someone signs up through our link
   const burstId = useRef(0);
@@ -178,16 +179,18 @@ export function useWorkRoom(authKey) {
       const where = placeLabel(peer.place);
       setMessages([{ system: true, text: invite ? 'Your friend joined. Enjoy the session!' : where ? `You’re working with someone in ${where}` : 'You’re matched. Say hello!' }]);
       setNotice(null);
-      setInviteCode(null);
+      setInvite(null);
+      setFriendWaiting(null);
       setPhase('matched');
       createPc(initiator);
       // let the partner know our current state (and screen, if we kept sharing)
       sendStatus({});
     });
-    s.on('invite', ({ code }) => {
-      setInviteCode(code);
+    s.on('invite', (info) => {
+      setInvite(info);
       setPhase('searching');
     });
+    s.on('friend-waiting', setFriendWaiting);
     s.on('invite-missing', () => {
       setInviteMissing(true);
       setPhase('idle');
@@ -217,7 +220,7 @@ export function useWorkRoom(authKey) {
       closePc();
       setPhase('idle');
       setPeer(null);
-      setInviteCode(null);
+      setInvite(null);
     };
   }, [authKey, createPc, closePc, stopScreenTracks, handleSignal, sendStatus, addBurst]);
 
@@ -261,7 +264,7 @@ export function useWorkRoom(authKey) {
     setLimitHit(false);
     setNotice(null);
     setInviteMissing(false);
-    setInviteCode(null);
+    setInvite(null);
     closePc();
     setPeer(null);
     const [stream] = await Promise.all([startMedia(), loadIce()]);
@@ -294,7 +297,7 @@ export function useWorkRoom(authKey) {
     stopScreenTracks();
     closePc();
     setPeer(null);
-    setInviteCode(null);
+    setInvite(null);
     setPhase('idle');
   }, [closePc, stopScreenTracks]);
 
@@ -382,6 +385,6 @@ export function useWorkRoom(authKey) {
 
   return {
     phase, peer, quota, limitHit, setLimitHit, messages, localStream, screenStream, remoteScreen, remoteCamera,
-    peerStatus, mic, cam, mediaError, clearMediaError, connState, createInvite, inviteCode, inviteMissing, setInviteMissing, reward, setReward, find, next, stop, toggleMic, toggleCam, startShare, stopShare, sendChat, bursts, react, online, notice,
+    peerStatus, mic, cam, mediaError, clearMediaError, connState, createInvite, invite, friendWaiting, setFriendWaiting, inviteMissing, setInviteMissing, reward, setReward, find, next, stop, toggleMic, toggleCam, startShare, stopShare, sendChat, bursts, react, online, notice,
   };
 }
