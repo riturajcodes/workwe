@@ -143,7 +143,7 @@ Documented without values. Copy the `.env.example` files and fill in your own.
 
 ## Deployment
 
-**Live demo:** _not deployed yet. Add the URL here once it is._
+**Live demo:** workwe.vercel.app
 
 To deploy your own copy:
 
