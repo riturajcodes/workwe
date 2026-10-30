@@ -83,13 +83,13 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
         gsap.set($('.lnav > *'), { y: -24, opacity: 0 });
         gsap.set($('.lni'), { yPercent: 115, rotate: 2 });
         gsap.set($('.ss-hero-lead, .ss-match-card, .ss-meta, .h-copy .lead'), { y: 24, opacity: 0 });
-        gsap.set($('.ss-ambient-card'), { scale: 0.8, opacity: 0, transformOrigin: 'center center' });
+        gsap.set($('.ss-wall-tile'), { opacity: 0 });
 
         const intro = gsap.timeline({ defaults: { ease: 'power4.out' } });
         intro
           .to($('.lnav > *'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.08 }, 0)
           .to($('.lni'), { yPercent: 0, rotate: 0, duration: 1.15, stagger: 0.11 }, 0.2)
-          .to($('.ss-ambient-card'), { scale: 1, opacity: 1, duration: 1.1, stagger: 0.12, ease: 'back.out(1.4)' }, 0.35)
+          .to($('.ss-wall-tile'), { opacity: 1, duration: 1.1, stagger: { each: 0.05, from: 'random' }, ease: 'power2.out' }, 0.2)
           .to($('.ss-hero-lead, .ss-match-card, .ss-meta'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.08 }, 0.5);
 
         // stats count up
@@ -105,26 +105,17 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
         // pointer parallax on the hero
         const hero = q('.ss-hero-container, .hero3');
         const move = {
-          cards: $('.ss-ambient-card').map((c) => [
-            gsap.quickTo(c, 'x', { duration: 1.2, ease: 'power3' }),
-            gsap.quickTo(c, 'y', { duration: 1.2, ease: 'power3' })
-          ]),
           info: q('.ss-hero-info') ? gsap.quickTo(q('.ss-hero-info'), 'y', { duration: 1.2, ease: 'power3' }) : () => {},
         };
         const onMove = (e) => {
           if (!hero) return;
           const r = hero.getBoundingClientRect();
-          const nx = (e.clientX - r.left) / r.width - 0.5;
           const ny = (e.clientY - r.top) / r.height - 0.5;
           move.info(ny * -14);
-          move.cards.forEach(([x, y], i) => { x(nx * (24 + (i % 3) * 14)); y(ny * (18 + (i % 2) * 12)); });
         };
         hero?.addEventListener('pointermove', onMove);
 
         // hero scroll-out: visual drifts up, copy fades
-        if (q('.ss-ambient-grid')) {
-          gsap.to(q('.ss-ambient-grid'), { yPercent: -18, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
-        }
         if (q('.ss-hero-info')) {
           gsap.to(q('.ss-hero-info'), { y: -80, opacity: 0.2, ease: 'none', scrollTrigger: { trigger: hero, start: 'center top', end: 'bottom top', scrub: true } });
         }

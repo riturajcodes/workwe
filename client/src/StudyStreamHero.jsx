@@ -15,6 +15,72 @@ const STUDY_VIDEOS = [
 
 const MODES = ['All Focus', 'Study', 'Code', 'Deep Work'];
 
+// Every clip we have, for the background wall
+const WALL_SRCS = [...STUDY_VIDEOS.map((v) => v.src), '/videos/dominika.mp4', '/videos/reena.mp4'];
+
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+// Tile count matches the grid columns in styles.css; fewer tiles = fewer decoders on phones
+const wallSize = () => {
+  if (window.matchMedia('(max-width: 640px)').matches) return 6;
+  if (window.matchMedia('(max-width: 1080px)').matches) return 12;
+  return 15;
+};
+
+const buildWall = (n) => {
+  const out = [];
+  while (out.length < n) out.push(...shuffle(WALL_SRCS));
+  return out.slice(0, n);
+};
+
+function VideoWall() {
+  const [tiles, setTiles] = useState(() => buildWall(wallSize()));
+
+  useEffect(() => {
+    const onResize = () => {
+      const n = wallSize();
+      setTiles((prev) => (prev.length === n ? prev : buildWall(n)));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Every few seconds one random tile swaps to a different person
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const id = setInterval(() => {
+      setTiles((prev) => {
+        const i = Math.floor(Math.random() * prev.length);
+        const unused = WALL_SRCS.filter((src) => !prev.includes(src));
+        const pool = unused.length ? unused : WALL_SRCS.filter((src) => src !== prev[i]);
+        const next = [...prev];
+        next[i] = pool[Math.floor(Math.random() * pool.length)];
+        return next;
+      });
+    }, 4500);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="ss-video-wall">
+      {tiles.map((src, i) => (
+        <div className="ss-wall-tile" key={i}>
+          <video key={src} autoPlay loop muted playsInline preload="metadata">
+            <source src={src} type="video/mp4" />
+          </video>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function StudyStreamHero({ room, user, onInvite, openLogin, limit }) {
   const [trail, setTrail] = useState([]);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -33,7 +99,7 @@ export default function StudyStreamHero({ room, user, onInvite, openLogin, limit
   // Handle pointer move over hero to generate video cursor trail
   const handlePointerMove = useCallback((e) => {
     const heroEl = heroRef.current;
-    if (!heroEl) return;
+    if (!heroEl || e.pointerType !== 'mouse') return;
 
     // Do not spawn trail directly inside the interactive match card
     if (e.target.closest('.ss-match-card')) return;
@@ -72,67 +138,10 @@ export default function StudyStreamHero({ room, user, onInvite, openLogin, limit
       className="ss-hero-container"
       onPointerMove={handlePointerMove}
     >
-      {/* Full-Bleed Atmospheric Study Desk Background */}
+      {/* Background: a wall of people studying */}
       <div className="ss-hero-backdrop" aria-hidden="true">
-        <div className="ss-hero-backdrop-img" />
+        <VideoWall />
         <div className="ss-hero-backdrop-tint" />
-      </div>
-
-      {/* Perimeter Ambient Video Windows */}
-      <div className="ss-ambient-grid" aria-hidden="true">
-        <div className="ss-ambient-card c-tl">
-          <div className="ss-card-badge">
-            <span>Elizaveta · Psychology</span>
-          </div>
-          <video autoPlay loop muted playsInline preload="metadata">
-            <source src="/videos/elizaveta.mp4" type="video/mp4" />
-          </video>
-        </div>
-
-        <div className="ss-ambient-card c-tr">
-          <div className="ss-card-badge">
-            <span>David · Computer Science</span>
-          </div>
-          <video autoPlay loop muted playsInline preload="metadata">
-            <source src="/videos/david.mp4" type="video/mp4" />
-          </video>
-        </div>
-
-        <div className="ss-ambient-card c-ml">
-          <div className="ss-card-badge">
-            <span>Justine · Pre-Med</span>
-          </div>
-          <video autoPlay loop muted playsInline preload="metadata">
-            <source src="/videos/justine.mp4" type="video/mp4" />
-          </video>
-        </div>
-
-        <div className="ss-ambient-card c-mr">
-          <div className="ss-card-badge">
-            <span>Marcos · Architecture</span>
-          </div>
-          <video autoPlay loop muted playsInline preload="metadata">
-            <source src="/videos/marcos.mp4" type="video/mp4" />
-          </video>
-        </div>
-
-        <div className="ss-ambient-card c-bl">
-          <div className="ss-card-badge">
-            <span>Meghan · Law</span>
-          </div>
-          <video autoPlay loop muted playsInline preload="metadata">
-            <source src="/videos/meghan.mp4" type="video/mp4" />
-          </video>
-        </div>
-
-        <div className="ss-ambient-card c-br">
-          <div className="ss-card-badge">
-            <span>Ronah · Biochemistry</span>
-          </div>
-          <video autoPlay loop muted playsInline preload="metadata">
-            <source src="/videos/ronah.mp4" type="video/mp4" />
-          </video>
-        </div>
       </div>
 
       {/* Floating Mouse Trail Videos */}
