@@ -316,6 +316,30 @@ code { font-family: var(--mono); background: var(--surface2); padding: 1px 6px; 
   padding: 10px 16px;
 }
 
+.ss-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 16px;
+  padding: 6px 13px 6px 11px;
+  border-radius: 99px;
+  background: rgba(20, 15, 12, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #e9ddd1;
+  font-size: 13px;
+  font-weight: 500;
+}
+.ss-online strong { color: #fffaf5; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ss-online i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  animation: pulse 2s infinite;
+}
+
 .ss-hero-title {
   font-size: clamp(38px, 5.5vw, 68px);
   font-weight: 700;

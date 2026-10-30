@@ -168,6 +168,14 @@ export default function StudyStreamHero({ room, user, onInvite, openLogin, limit
 
       {/* Center Hero Information Content */}
       <div className="ss-hero-info">
+        {room.online != null && (
+          <div className="ss-online" aria-live="polite">
+            <i />
+            <strong>{room.online.toLocaleString()}</strong>
+            <span>{room.online === 1 ? 'person' : 'people'} online right now</span>
+          </div>
+        )}
+
         {/* Editorial Headline */}
         <h1 className="ss-hero-title">
           <span className="ln"><span className="lni">Study together,</span></span>

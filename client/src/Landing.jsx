@@ -82,7 +82,7 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
         /* ---------- hero intro ---------- */
         gsap.set($('.lnav > *'), { y: -24, opacity: 0 });
         gsap.set($('.lni'), { yPercent: 115, rotate: 2 });
-        gsap.set($('.ss-hero-lead, .ss-match-card, .ss-meta, .h-copy .lead'), { y: 24, opacity: 0 });
+        gsap.set($('.ss-online, .ss-hero-lead, .ss-match-card, .ss-meta, .h-copy .lead'), { y: 24, opacity: 0 });
         gsap.set($('.ss-wall-tile'), { opacity: 0 });
 
         const intro = gsap.timeline({ defaults: { ease: 'power4.out' } });
@@ -90,6 +90,7 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
           .to($('.lnav > *'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.08 }, 0)
           .to($('.lni'), { yPercent: 0, rotate: 0, duration: 1.15, stagger: 0.11 }, 0.2)
           .to($('.ss-wall-tile'), { opacity: 1, duration: 1.1, stagger: { each: 0.05, from: 'random' }, ease: 'power2.out' }, 0.2)
+          .to($('.ss-online'), { y: 0, opacity: 1, duration: 0.9 }, 0.15)
           .to($('.ss-hero-lead, .ss-match-card, .ss-meta'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.08 }, 0.5);
 
         // stats count up
