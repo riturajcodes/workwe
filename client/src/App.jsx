@@ -76,7 +76,7 @@ export default function App() {
   const [confirmNext, setConfirmNext] = useState(false);
   const [loginOpen, setLoginOpen] = useState(!!LINK.ref); // a sign-up link opens sign-in straight away
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('workwe_theme') || 'dark'; } catch { return 'dark'; }
+    try { return localStorage.getItem('workwe_theme') || 'light'; } catch { return 'light'; }
   });
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

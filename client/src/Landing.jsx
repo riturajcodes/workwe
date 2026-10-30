@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { Avatar, HeroVisual, Icon, Logo } from './components.jsx';
+import StudyStreamHero from './StudyStreamHero.jsx';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -80,26 +81,16 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
 
         /* ---------- hero intro ---------- */
         gsap.set($('.lnav > *'), { y: -24, opacity: 0 });
-        gsap.set(q('.trust'), { scale: 0.7, opacity: 0, transformOrigin: 'left center' });
-        gsap.set($('.lni'), { yPercent: 115, rotate: 3 });
-        gsap.set($('.h-copy .lead, .h-copy .cta-row, .h-copy .meta'), { y: 28, opacity: 0 });
-        gsap.set($('.hv-art, .hv-photo'), { y: 120, scale: 0.9, opacity: 0, transformOrigin: '50% 100%' });
-        gsap.set($('.scanbox'), { scale: 0.4, opacity: 0, transformOrigin: 'top left' });
-        gsap.set(q('.hv-chip'), { x: -40, opacity: 0 });
-        gsap.set($('.h-stats li'), { x: 60, opacity: 0 });
-        gsap.set(q('.hv-glow'), { scale: 0.5, opacity: 0 });
+        gsap.set($('.lni'), { yPercent: 115, rotate: 2 });
+        gsap.set($('.ss-hero-lead, .ss-match-card, .ss-meta, .h-copy .lead'), { y: 24, opacity: 0 });
+        gsap.set($('.ss-ambient-card'), { scale: 0.8, opacity: 0, transformOrigin: 'center center' });
 
         const intro = gsap.timeline({ defaults: { ease: 'power4.out' } });
         intro
           .to($('.lnav > *'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.08 }, 0)
-          .to(q('.trust'), { scale: 1, opacity: 1, duration: 0.8, ease: 'back.out(2)' }, 0.2)
-          .to(q('.hv-glow'), { scale: 1, opacity: 1, duration: 1.6 }, 0.1)
-          .to($('.lni'), { yPercent: 0, rotate: 0, duration: 1.15, stagger: 0.11 }, 0.25)
-          .to($('.hv-art, .hv-photo'), { y: 0, scale: 1, opacity: 1, duration: 1.5 }, 0.3)
-          .to($('.h-copy .lead, .h-copy .cta-row, .h-copy .meta'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.1 }, 0.85)
-          .to($('.scanbox'), { scale: 1, opacity: 1, duration: 0.8, stagger: 0.14, ease: 'back.out(1.8)' }, 1.1)
-          .to(q('.hv-chip'), { x: 0, opacity: 1, duration: 0.9 }, 1.5)
-          .to($('.h-stats li'), { x: 0, opacity: 1, duration: 0.9, stagger: 0.12 }, 1.2);
+          .to($('.lni'), { yPercent: 0, rotate: 0, duration: 1.15, stagger: 0.11 }, 0.2)
+          .to($('.ss-ambient-card'), { scale: 1, opacity: 1, duration: 1.1, stagger: 0.12, ease: 'back.out(1.4)' }, 0.35)
+          .to($('.ss-hero-lead, .ss-match-card, .ss-meta'), { y: 0, opacity: 1, duration: 0.9, stagger: 0.08 }, 0.5);
 
         // stats count up
         $('[data-count]').forEach((n, i) => {
@@ -111,28 +102,32 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
           });
         });
 
-        // idle life: pulsing scan boxes, shimmering lines, floating figures
-        gsap.to($('.scanbox'), { opacity: 0.72, duration: 1.4, yoyo: true, repeat: -1, ease: 'sine.inOut', stagger: { each: 0.5, from: 'random' }, delay: 3 });
-        gsap.to($('.mini i'), { scaleX: 0.6, transformOrigin: 'left', duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut', stagger: 0.2 });
-        gsap.to(q('.hv-chip'), { y: -10, duration: 2.4, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 2.5 });
-        gsap.to(q('.hv-stage'), { y: -8, duration: 3.2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-
         // pointer parallax on the hero
-        const hero = q('.hero3');
+        const hero = q('.ss-hero-container, .hero3');
         const move = {
-          art: gsap.quickTo(q('.hv-stage'), 'x', { duration: 0.8, ease: 'power3' }),
-          boxes: $('.scanbox').map((b) => [gsap.quickTo(b, 'x', { duration: 1, ease: 'power3' }), gsap.quickTo(b, 'y', { duration: 1, ease: 'power3' })]),
-          glow: gsap.quickTo(q('.hv-glow'), 'x', { duration: 1.4, ease: 'power3' }),
+          cards: $('.ss-ambient-card').map((c) => [
+            gsap.quickTo(c, 'x', { duration: 1.2, ease: 'power3' }),
+            gsap.quickTo(c, 'y', { duration: 1.2, ease: 'power3' })
+          ]),
+          info: q('.ss-hero-info') ? gsap.quickTo(q('.ss-hero-info'), 'y', { duration: 1.2, ease: 'power3' }) : () => {},
         };
         const onMove = (e) => {
+          if (!hero) return;
           const r = hero.getBoundingClientRect();
           const nx = (e.clientX - r.left) / r.width - 0.5;
           const ny = (e.clientY - r.top) / r.height - 0.5;
-          move.art(nx * 22);
-          move.glow(nx * -60);
-          move.boxes.forEach(([x, y], i) => { x(nx * (28 + i * 14)); y(ny * (22 + i * 10)); });
+          move.info(ny * -14);
+          move.cards.forEach(([x, y], i) => { x(nx * (24 + (i % 3) * 14)); y(ny * (18 + (i % 2) * 12)); });
         };
-        hero.addEventListener('pointermove', onMove);
+        hero?.addEventListener('pointermove', onMove);
+
+        // hero scroll-out: visual drifts up, copy fades
+        if (q('.ss-ambient-grid')) {
+          gsap.to(q('.ss-ambient-grid'), { yPercent: -18, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
+        }
+        if (q('.ss-hero-info')) {
+          gsap.to(q('.ss-hero-info'), { y: -80, opacity: 0.2, ease: 'none', scrollTrigger: { trigger: hero, start: 'center top', end: 'bottom top', scrub: true } });
+        }
 
         // hero scroll-out: visual drifts up, copy fades
         gsap.to(q('.hv'), { yPercent: -14, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
@@ -304,35 +299,14 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
           </div>
         </header>
 
-        {/* ===== hero ===== */}
-        <section className="hero3">
-          <div className="h-left">
-            <span className="trust"><i />{room.online !== null ? `${room.online.toLocaleString()} ${room.online === 1 ? 'person' : 'people'} working right now` : 'Live co-working'}</span>
-            <div className="h-copy">
-              <h1>
-                <span className="ln"><span className="lni">Do your best</span></span>
-                <span className="ln"><span className="lni">work beside</span></span>
-                <span className="ln"><span className="lni"><em>someone.</em></span></span>
-              </h1>
-              <p className="lead">Get matched with a real person for a live co-working session. See each other, share screens, and skip to someone new whenever you like.</p>
-              <div className="cta-row">
-                <Join />
-                <button className="btn text lg" onClick={onInvite}><Icon n="users" size={16} />Invite a friend</button>
-                {!user && <button className="btn text lg" onClick={openLogin}>Log in</button>}
-              </div>
-              <p className="meta">{user ? 'Unlimited sessions while signed in.' : `${limit} free sessions a day. No account needed.`}</p>
-              {room.messages.at(-1)?.system && <p className="hint">{room.messages.at(-1).text}</p>}
-            </div>
-          </div>
-
-          <HeroVisual />
-
-          <ul className="h-stats">
-            <li><span className="sico"><Icon n="screen" size={18} /></span><div><b data-count="2" data-suffix="×" /><small>screens shared<br />at the same time</small></div></li>
-            <li><span className="sico"><Icon n="lock" size={18} /></span><div><b data-count="0" /><small>recordings,<br />ever stored</small></div></li>
-            <li><span className="sico"><Icon n="users" size={18} /></span><div><b data-count={limit} /><small>free sessions<br />every day</small></div></li>
-          </ul>
-        </section>
+        {/* ===== StudyStream Style Hero with Video Mouse Trail ===== */}
+        <StudyStreamHero
+          room={room}
+          user={user}
+          onInvite={onInvite}
+          openLogin={openLogin}
+          limit={limit}
+        />
 
         {/* ===== marquee ===== */}
         <section className="mq" aria-hidden>
