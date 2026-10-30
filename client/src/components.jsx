@@ -89,6 +89,7 @@ export function Chat({ messages, onSend, peerName, onClose }) {
 }
 
 const I = {
+  flag: <path d="M5.5 21V4.5m0 0h12l-2.5 4.25L17.5 13h-12" />,
   mic: <path d="M12 14.5a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5.5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0M12 16.5V20" />,
   cam: <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h7A2.5 2.5 0 0 1 15 8.5v7a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 3 15.5v-7Zm12 2.5 6-3v8l-6-3" />,
   screen: <path d="M3.5 5.5h17v11h-17zM8.5 20h7M12 16.5V20" />,

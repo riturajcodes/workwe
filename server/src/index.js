@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { Server } from 'socket.io';
-import { Invite, User } from './models.js';
+import { Invite, Report, User } from './models.js';
 import { FREE_LIMIT, keysFor, getUsed, bump } from './quota.js';
 
 const { MONGODB_URI, JWT_SECRET, GOOGLE_CLIENT_ID, CLIENT_ORIGIN = 'http://localhost:5173' } = process.env;
@@ -155,6 +155,7 @@ const io = new Server(server, { cors: { origin: origins }, maxHttpBufferSize: 1e
 const queue = []; // sockets waiting for a random partner
 const rooms = new Map(); // invite code -> Set of sockets waiting on that link
 const personKey = (s) => s.data.user?.id || s.data.guestId;
+const REPORT_REASONS = new Set(['feedback', 'bug', 'sexual', 'harassment', 'underage', 'spam', 'other']);
 const partners = new Map(); // socket.id -> partner socket.id
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -237,9 +238,14 @@ const card = (x) => ({
   place: x.data.place,
 });
 
+// remembered per socket so a report filed after leaving a call still names who it was about
+const snapshot = (x) => ({ key: personKey(x), name: x.data.user?.name || 'Guest', ip: x.data.ip, at: new Date() });
+
 async function pair(a, b, invite = false) {
   partners.set(a.id, b.id);
   partners.set(b.id, a.id);
+  a.data.lastPartner = snapshot(b);
+  b.data.lastPartner = snapshot(a);
   a.emit('matched', { initiator: true, peer: card(b), invite });
   b.emit('matched', { initiator: false, peer: card(a), invite });
   a.emit('quota', await quotaState(a));
@@ -350,6 +356,30 @@ io.on('connection', async (socket) => {
       screen: !!s.screen,
       screenId: s.screen && typeof s.screenId === 'string' ? s.screenId.slice(0, 100) : null,
     });
+  });
+
+  let reportTimes = [];
+  socket.on('report', async (r, ack) => {
+    if (typeof ack !== 'function') return;
+    const now = Date.now();
+    reportTimes = reportTimes.filter((t) => now - t < 10 * 60_000);
+    const details = typeof r?.details === 'string' ? r.details.trim().slice(0, 2000) : '';
+    const contact = typeof r?.contact === 'string' ? r.contact.trim().slice(0, 200) : '';
+    if (!REPORT_REASONS.has(r?.reason) || !details) return ack({ ok: false, error: 'Choose a reason and describe what happened.' });
+    if (reportTimes.length >= 5) return ack({ ok: false, error: 'You’ve sent a lot of reports. Try again in a few minutes.' });
+    reportTimes.push(now);
+    try {
+      await Report.create({
+        reason: r.reason,
+        details,
+        contact: contact || undefined,
+        reporter: snapshot(socket),
+        reported: socket.data.lastPartner,
+      });
+      ack({ ok: true });
+    } catch {
+      ack({ ok: false, error: 'Couldn’t send your report. Try again.' });
+    }
   });
 
   socket.on('disconnect', () => {

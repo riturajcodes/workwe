@@ -3,6 +3,8 @@ import { fetchInvite, fetchMe, fetchReferrer, getRef, getToken, googleLogin, set
 import { placeLabel, useWorkRoom } from './useWorkRoom.js';
 import { Avatar, Chat, Controls, GoogleButton, Icon, Logo, ReactionLayer, VipBadge, Video } from './components.jsx';
 import Landing from './Landing.jsx';
+import { TermsModal, termsAccepted } from './Terms.jsx';
+import { ReportButton, ReportModal } from './Report.jsx';
 
 const MEDIA_COPY = {
   denied: ['Allow camera and microphone', 'WorkWe needs both to connect you with a partner. If your browser doesn’t ask, click the camera or lock icon in the address bar, allow camera and microphone for this site, then try again.'],
@@ -85,6 +87,16 @@ export default function App() {
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   const room = useWorkRoom(authKey);
 
+  // Nobody joins a call (random or invite) until they've accepted the current terms
+  const [termsOk, setTermsOk] = useState(termsAccepted);
+  const [termsGate, setTermsGate] = useState(null); // { run } = the join waiting on acceptance
+  const [termsOpen, setTermsOpen] = useState(false); // read-only, from the footer
+  const [reportOpen, setReportOpen] = useState(false);
+  const openReport = () => setReportOpen(true);
+  const withTerms = (fn) => (...args) => (termsOk ? fn(...args) : setTermsGate({ run: () => fn(...args) }));
+  const find = withTerms(room.find);
+  const createInvite = withTerms(room.createInvite);
+
   // close the confirmation if the call ends underneath it; Esc cancels
   useEffect(() => {
     if (room.phase !== 'matched') setConfirmNext(false);
@@ -162,6 +174,7 @@ export default function App() {
         <nav className="top">
           <div className="brand"><Logo size={22} /><span>WorkWe</span></div>
           <div className="right">
+            <ReportButton onClick={openReport} />
             {room.online !== null && <span className="status"><i />{room.online.toLocaleString()} online</span>}
             {left !== null && <span className={`status ${left === 0 ? 'warn' : ''}`}>{left}<span className="long"> free {left === 1 ? 'session' : 'sessions'}</span> left</span>}
             <VipChip user={user} onClick={openVip} />
@@ -173,7 +186,7 @@ export default function App() {
 
       {!inRoom && (
         <main className="home">
-          <Landing room={room} user={user} theme={theme} toggleTheme={toggleTheme} openLogin={() => setLoginOpen(true)} signOut={signOut} onInvite={room.createInvite} vipChip={<VipChip user={user} onClick={openVip} />} />
+          <Landing room={{ ...room, find }} user={user} theme={theme} toggleTheme={toggleTheme} openLogin={() => setLoginOpen(true)} signOut={signOut} onInvite={createInvite} openTerms={() => setTermsOpen(true)} openReport={openReport} vipChip={<VipChip user={user} onClick={openVip} />} />
         </main>
       )}
 
@@ -302,7 +315,7 @@ export default function App() {
                 <p>Invite links work for 24 hours. Ask your friend for a new one, or work with someone new now.</p>
                 <div className="modal-actions">
                   <button className="btn outline" onClick={() => setPendingInvite(null)}>Close</button>
-                  <button className="btn primary" autoFocus onClick={() => { setPendingInvite(null); room.find(); }}>Find a partner</button>
+                  <button className="btn primary" autoFocus onClick={() => { setPendingInvite(null); find(); }}>Find a partner</button>
                 </div>
               </>
             ) : (
@@ -312,7 +325,7 @@ export default function App() {
                 <p>Turn on your camera and microphone to join them. This link works until {shortTime(pendingInvite.expiresAt)}.</p>
                 <div className="modal-actions">
                   <button className="btn outline" onClick={() => setPendingInvite(null)}>Not now</button>
-                  <button className="btn primary" autoFocus onClick={() => { const { code } = pendingInvite; setPendingInvite(null); room.find(code); }}>Join {pendingInvite.host.name.split(' ')[0]}</button>
+                  <button className="btn primary" autoFocus onClick={() => { const { code } = pendingInvite; setPendingInvite(null); find(code); }}>Join {pendingInvite.host.name.split(' ')[0]}</button>
                 </div>
               </>
             )}
@@ -328,7 +341,7 @@ export default function App() {
             <p>They opened your invite link and are ready to co-work.</p>
             <div className="modal-actions">
               <button className="btn outline" onClick={() => room.setFriendWaiting(null)}>Later</button>
-              <button className="btn primary" autoFocus onClick={() => { const { code } = room.friendWaiting; room.setFriendWaiting(null); room.find(code); }}>Join now</button>
+              <button className="btn primary" autoFocus onClick={() => { const { code } = room.friendWaiting; room.setFriendWaiting(null); find(code); }}>Join now</button>
             </div>
           </div>
         </div>
@@ -363,7 +376,7 @@ export default function App() {
             <p>Your friend isn’t waiting on this link anymore. Ask them for a new one, or work with someone new now.</p>
             <div className="modal-actions">
               <button className="btn outline" onClick={() => room.setInviteMissing(false)}>Close</button>
-              <button className="btn primary" autoFocus onClick={() => room.find()}>Find a partner</button>
+              <button className="btn primary" autoFocus onClick={() => find()}>Find a partner</button>
             </div>
           </div>
         </div>
@@ -388,10 +401,24 @@ export default function App() {
             <p>{MEDIA_COPY[room.mediaError.kind]?.[1] || MEDIA_COPY.other[1]}</p>
             <div className="modal-actions">
               <button className="btn outline" onClick={room.clearMediaError}>Not now</button>
-              <button className="btn primary" autoFocus onClick={() => { room.clearMediaError(); room.find(); }}>Allow camera & mic</button>
+              <button className="btn primary" autoFocus onClick={() => { room.clearMediaError(); find(); }}>Allow camera & mic</button>
             </div>
           </div>
         </div>
+      )}
+
+      {termsGate && (
+        <TermsModal
+          onClose={() => setTermsGate(null)}
+          onAccept={() => { setTermsOk(true); setTermsGate(null); termsGate.run(); }}
+        />
+      )}
+      {termsOpen && <TermsModal onClose={() => setTermsOpen(false)} />}
+      {reportOpen && (
+        <ReportModal
+          onSend={room.report} onClose={() => setReportOpen(false)}
+          inCall={room.phase === 'matched'} peerName={room.phase === 'matched' ? room.peer?.name : null}
+        />
       )}
 
       {(loginOpen || (room.limitHit && !user)) && !user && (

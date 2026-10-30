@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { Avatar, HeroVisual, Icon, Logo } from './components.jsx';
+import { ReportButton } from './Report.jsx';
 import StudyStreamHero from './StudyStreamHero.jsx';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -54,7 +55,7 @@ const Chars = ({ text }) =>
     </span>
   ));
 
-export default function Landing({ room, user, theme, toggleTheme, openLogin, signOut, onInvite, vipChip }) {
+export default function Landing({ room, user, theme, toggleTheme, openLogin, signOut, onInvite, openTerms, openReport, vipChip }) {
   const root = useRef(null);
   const cursor = useRef(null);
   const lenisRef = useRef(null);
@@ -280,6 +281,7 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
             <a href="#features" onClick={(e) => goto(e, '#features')}>Features</a>
           </nav>
           <div className="lright">
+            <ReportButton onClick={openReport} />
             {vipChip}
             <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme"><Icon n={theme === 'dark' ? 'sun' : 'moon'} size={16} /></button>
             {user ? (
@@ -410,7 +412,7 @@ export default function Landing({ room, user, theme, toggleTheme, openLogin, sig
             <div className="fin-in"><Join /></div>
           </div>
         </section>
-        <footer className="foot"><span>© 2026 WorkWe</span><span>Peer-to-peer video. Never recorded.</span></footer>
+        <footer className="foot"><span>© 2026 WorkWe · <button className="link" onClick={openTerms}>Terms of Use</button> · <button className="link" onClick={openReport}>Report or feedback</button></span><span>Peer-to-peer video. Never recorded.</span></footer>
       </div>
 
       <button className="btn primary float-join magnet" onClick={room.find}>Join a session<Icon n="arrow" size={16} /></button>

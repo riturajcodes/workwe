@@ -825,6 +825,40 @@ code { font-family: var(--mono); background: var(--surface2); padding: 1px 6px; 
 .modal-actions .btn { flex: 1; }
 .gbtn { min-height: 44px; width: 100%; max-width: 300px; display: flex; justify-content: center; }
 @media (max-width: 420px) { .modal { padding: 28px 20px 22px; } }
+.terms-modal { max-width: 560px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+.terms-modal > * { flex-shrink: 0; }
+.terms-modal > p:not(.hint) { margin-bottom: 16px; }
+.terms-modal .terms-body { flex: 0 1 auto; min-height: 110px; }
+.terms-body { width: 100%; max-height: min(44vh, 420px); overflow-y: auto; overscroll-behavior: contain; text-align: left; padding: 4px 16px 12px; margin-bottom: 18px; border: 1px solid var(--line2); border-radius: 12px; background: var(--bg); }
+.terms-body h3 { font-size: 14px; font-weight: 600; margin: 18px 0 4px; color: var(--ink); }
+.modal .terms-body p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.modal .terms-body .terms-date { margin-top: 12px; font-size: 12.5px; }
+.terms-body a { color: var(--accent); }
+.terms-check { display: flex; gap: 10px; align-items: flex-start; text-align: left; font-size: 13.5px; line-height: 1.5; color: var(--ink); margin-bottom: 18px; cursor: pointer; }
+.terms-check input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+.modal-actions .btn:disabled { opacity: .45; cursor: not-allowed; }
+.report-btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 99px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted); border: 1px solid var(--line2); background: var(--surface); transition: color .15s, border-color .15s; }
+.report-btn:hover { color: var(--ink); border-color: var(--muted); }
+.lright .report-btn { height: 36px; color: #fffaf5; border-color: rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.12); }
+.lright .report-btn:hover { color: #f7a072; border-color: rgba(247, 160, 114, 0.5); }
+@media (max-width: 640px) {
+  .report-btn { width: 36px; padding: 0; justify-content: center; }
+  .report-btn span { display: none; }
+  .top .report-btn { width: 32px; height: 32px; }
+}
+.report-modal { max-width: 460px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+.report-modal form { width: 100%; display: flex; flex-direction: column; text-align: left; }
+.report-modal form > h2, .report-modal form > p:not(.hint) { text-align: center; }
+.report-modal form > p:not(.hint) { margin: 8px 0 20px; }
+.report-modal .hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.report-modal .hint.warn { color: var(--amber); }
+.report-ico { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--surface2); color: var(--accent); margin-bottom: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.field em { font-style: normal; font-weight: 400; color: var(--muted); }
+.field select, .field textarea, .field input { width: 100%; box-sizing: border-box; font: inherit; font-weight: 400; font-size: 14.5px; color: var(--ink); background: var(--bg); border: 1px solid var(--line2); border-radius: 10px; padding: 10px 12px; }
+.field textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
+.field select:focus, .field textarea:focus, .field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.foot .link { font-size: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 560px) {
   .lnav { padding: 0 14px; }
   .lright { gap: 8px; }

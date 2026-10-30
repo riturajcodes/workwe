@@ -32,6 +32,20 @@ const inviteSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 },
 });
 
+// Someone reporting another user or a problem. `reported` is who the reporter was last matched with.
+const personSchema = new mongoose.Schema({ key: String, name: String, ip: String, at: Date }, { _id: false });
+const reportSchema = new mongoose.Schema(
+  {
+    reason: { type: String, required: true },
+    details: { type: String, required: true },
+    contact: String,
+    reporter: personSchema,
+    reported: personSchema,
+  },
+  { timestamps: true }
+);
+
 export const User = mongoose.model('User', userSchema);
+export const Report = mongoose.model('Report', reportSchema);
 export const Invite = mongoose.model('Invite', inviteSchema);
 export const Usage = mongoose.model('Usage', usageSchema);

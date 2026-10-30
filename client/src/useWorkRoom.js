@@ -373,6 +373,13 @@ export function useWorkRoom(authKey) {
     addBurst(emoji, seed);
   }, [addBurst]);
 
+  // a report for the team; resolves { ok } or { ok: false, error }
+  const report = useCallback((data) => new Promise((resolve) => {
+    const s = socketRef.current;
+    if (!s?.connected) return resolve({ ok: false, error: 'Not connected to WorkWe. Check your connection and try again.' });
+    s.timeout(8000).emit('report', data, (err, res) => resolve(err ? { ok: false, error: 'No response from WorkWe. Try again.' } : res));
+  }), []);
+
   const sendChat = useCallback((text) => {
     const t = text.trim();
     if (!t) return;
@@ -385,6 +392,6 @@ export function useWorkRoom(authKey) {
 
   return {
     phase, peer, quota, limitHit, setLimitHit, messages, localStream, screenStream, remoteScreen, remoteCamera,
-    peerStatus, mic, cam, mediaError, clearMediaError, connState, createInvite, invite, friendWaiting, setFriendWaiting, inviteMissing, setInviteMissing, reward, setReward, find, next, stop, toggleMic, toggleCam, startShare, stopShare, sendChat, bursts, react, online, notice,
+    peerStatus, mic, cam, mediaError, clearMediaError, connState, createInvite, invite, friendWaiting, setFriendWaiting, inviteMissing, setInviteMissing, reward, setReward, find, next, stop, toggleMic, toggleCam, startShare, stopShare, sendChat, report, bursts, react, online, notice,
   };
 }
