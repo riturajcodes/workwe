@@ -248,7 +248,7 @@ export default function StudyStreamHero({ room, user, onInvite, openLogin, limit
           <div className="ss-match-footer">
             <button className="btn ss-match-now-btn primary lg magnet" onClick={room.find}>
               <Icon n="arrow" size={16} />
-              <span>Start 1-on-1 Match</span>
+              <span>Start Random Match</span>
             </button>
             <button className="btn ss-match-invite-btn outline lg magnet" onClick={onInvite}>
               <Icon n="users" size={16} />
